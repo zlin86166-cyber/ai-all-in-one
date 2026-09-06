@@ -102,8 +102,8 @@ class IntegrationManager:
             progress=3,
             started_at=utcnow(),
         )
-        command = self._command_for_tool(kind, script, args)
         try:
+            command = self._command_for_tool(kind, script, args)
             process = subprocess.Popen(
                 command,
                 cwd=project["path"],
