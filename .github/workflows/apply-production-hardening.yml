@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - tools/apply_production_hardening.py
+      - tools/fix_production_hardening_migration.py
       - .github/workflows/apply-production-hardening.yml
 permissions:
   contents: write
@@ -19,7 +20,9 @@ jobs:
         with:
           python-version: '3.13'
       - name: Apply migration
-        run: python tools/apply_production_hardening.py
+        run: |
+          python tools/apply_production_hardening.py
+          python tools/fix_production_hardening_migration.py
       - name: Run tests
         run: python -m unittest discover -v
       - name: Commit hardened runtime
