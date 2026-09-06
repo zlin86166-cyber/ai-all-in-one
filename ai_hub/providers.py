@@ -51,22 +51,16 @@ def _runtime_environment(paths: AppPaths) -> dict[str, str]:
     cli_bin = paths.runtime / "cli" / "node_modules" / ".bin"
     if cli_bin.exists():
         path_entries.append(str(cli_bin))
-    openai_bin = paths.runtime / "openai-cli"
-    if openai_bin.exists():
-        path_entries.append(str(openai_bin))
     portable_node = paths.runtime / "node"
     if portable_node.exists():
         for executable in portable_node.rglob("node.exe"):
             path_entries.append(str(executable.parent))
             break
-    bundled = Path(
-        os.environ.get(
-            "AI_HUB_BUNDLED_NODE",
-            r"C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin",
-        )
-    )
-    if bundled.exists():
-        path_entries.append(str(bundled))
+    bundled_override = os.environ.get("AI_HUB_BUNDLED_NODE")
+    if bundled_override:
+        bundled = Path(bundled_override)
+        if bundled.exists():
+            path_entries.append(str(bundled))
     environment["PATH"] = os.pathsep.join(path_entries + [environment.get("PATH", "")])
     environment["PYTHONUTF8"] = "1"
     environment["NO_COLOR"] = "1"
