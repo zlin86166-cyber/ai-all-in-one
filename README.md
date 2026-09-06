@@ -1,5 +1,7 @@
 # AI Hub (ai-all-in-one)
 
+[公開下載站](https://ai-hub-windows-download.ai-pro-myhome.chatgpt.site) · [直接下載 Windows ZIP](https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.0/AIHub-Windows.zip) · [v0.2.0 Release](https://github.com/zlin86166-cyber/ai-all-in-one/releases/tag/v0.2.0)
+
 AI Hub 是一套 **Windows 本機多模型 AI Operator Console**。正式產品只以原生 Windows 桌面版發佈：下載 `AIHub-Windows.zip`、解壓後直接執行 `AIHub.exe`，專案、對話、任務、模型 metadata、研究索引與設定都保存在本機。
 
 核心支援 **Codex CLI、Gemini CLI、官方 OpenAI CLI（ChatGPT API）、Ollama 本機模型、≤50B 的 Kimi/DeepSeek 官方開源模型、OpenAI-compatible 推論節點、ComfyUI**，並整合多專案、檔案操作、PowerShell、任務進度、ETA、歷史對話、AI 協作、研究爬蟲、排程與權限控制。
@@ -17,6 +19,8 @@ Windows Build 會產生完整的本機套件：
 - `training/`：QLoRA 訓練腳本；實際訓練仍需要相容 NVIDIA CUDA / Python ML 環境。
 
 GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；建立 `v*` tag 時，同一個 ZIP 會附加到 GitHub Release，作為可直接下載的 Windows 發行包。
+
+下載網站的可維護原始碼位於 `download-site/`；公開部署由 OpenAI Sites 執行，下載檔則固定來自 GitHub Release，訪客不需要 GitHub 登入即可下載。
 
 ## 第一次使用
 

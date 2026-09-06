@@ -56,15 +56,8 @@ jobs:
           if-no-files-found: error
       - name: Attach package to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = '${{ github.ref_name }}'
-          gh release view $tag --repo '${{ github.repository }}' *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag 'AIHub-Windows.zip' --clobber --repo '${{ github.repository }}'
-          }
-          else {
-            gh release create $tag 'AIHub-Windows.zip' --generate-notes --title "AI Hub $tag" --repo '${{ github.repository }}'
-          }
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AIHub-Windows.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
