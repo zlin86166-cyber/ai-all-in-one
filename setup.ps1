@@ -41,7 +41,6 @@ function Install-AIHubPortableNode {
 if (-not ($InstallCli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
     $InstallCli = $true
     $CreateDesktopShortcut = $true
-    $InstallWatchdog = $true
 }
 
 if ($InstallCli) {
@@ -65,9 +64,9 @@ if ($InstallCli) {
 
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) {
-        Write-Host 'Installing/updating Hugging Face CLI for official model downloads...'
+        Write-Host 'Installing/updating Hugging Face CLI for optional model-weight downloads...'
         & $python.Source -m pip install --disable-pip-version-check --upgrade 'huggingface_hub[cli]'
-        if ($LASTEXITCODE -ne 0) { Write-Warning 'huggingface_hub installation failed; model metadata sync still works, direct HF download may require manual CLI setup.' }
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'huggingface_hub installation failed; metadata sync still works, direct HF download may require a separate Python environment.' }
     }
 }
 
@@ -84,11 +83,18 @@ if ($CreateDesktopShortcut) {
     $shortcutPath = Join-Path $desktop 'AI Hub.lnk'
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = 'powershell.exe'
-    $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $appRoot 'start.ps1')`""
-    $shortcut.WorkingDirectory = $appRoot
     $desktopExecutable = Join-Path $appRoot 'AIHub.exe'
-    $shortcut.IconLocation = if (Test-Path -LiteralPath $desktopExecutable) { "$desktopExecutable,0" } else { 'shell32.dll,14' }
+    if (Test-Path -LiteralPath $desktopExecutable) {
+        $shortcut.TargetPath = $desktopExecutable
+        $shortcut.Arguments = ''
+        $shortcut.IconLocation = "$desktopExecutable,0"
+    }
+    else {
+        $shortcut.TargetPath = 'powershell.exe'
+        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $appRoot 'start.ps1')`" -Source"
+        $shortcut.IconLocation = 'shell32.dll,14'
+    }
+    $shortcut.WorkingDirectory = $appRoot
     $shortcut.Description = 'AI Hub local multi-model operator console'
     $shortcut.Save()
     Write-Host "Desktop shortcut: $shortcutPath"
@@ -101,4 +107,11 @@ if ($InstallWatchdog) {
     & (Join-Path $appRoot 'install-watchdog.ps1')
 }
 
-Write-Host 'Setup complete. Run start.cmd to open AI Hub.'
+Write-Host 'Setup complete.'
+$desktopExecutable = Join-Path $appRoot 'AIHub.exe'
+if (Test-Path -LiteralPath $desktopExecutable) {
+    Write-Host 'Launch AIHub.exe to work locally.'
+}
+else {
+    Write-Host 'AIHub.exe is not present; use start.ps1 -Source for source development.'
+}
