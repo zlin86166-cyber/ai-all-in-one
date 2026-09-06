@@ -1,6 +1,6 @@
 # AI Hub 最終整合規格提示詞
 
-請製作一套完整的 Windows 本機多模型 AI 工作台 **AI Hub**，介面採用「白色潔淨 + 極客 Operator Console」風格：以白色為主、資訊密度高但清楚、使用適量等寬字體、網格/終端機元素、綠色與青色作為狀態色，並讓 Web 版與原生 Windows 版維持一致的設計語言。
+請製作一套完整的 Windows 本機多模型 AI 工作台 **AI Hub**。正式產品只提供 **原生 Windows 桌面版**，不以 Web UI 作為使用者介面或正式啟動方式。介面採用「白色潔淨 + 極客 Operator Console」風格：以白色為主、資訊密度高但清楚、使用適量等寬字體、網格/終端機元素、綠色與青色作為狀態色。使用者應能下載 Windows 發行包、解壓後直接在本機啟動 `AIHub.exe` 並進行工作。
 
 ## 1. AI 與模型
 
@@ -133,6 +133,8 @@ QLoRA 訓練前必須真實檢查：JSONL 資料格式、樣本數、CUDA、NVID
 - `workspace`：只允許目前專案範圍內寫入。
 - `full`：經 UAC 與使用者明確解鎖後，允許整台電腦所需的本機操作能力。
 
+一般啟動不得自動取得 Windows 系統管理員權限，也不得自動進入 Full。只有使用者明確要求需要系統層能力的工作時才提升權限。
+
 即使在 full 模式，以下動作仍須每次單獨核准：
 
 - 帳號登入/授權
@@ -177,7 +179,17 @@ QLoRA 訓練前必須真實檢查：JSONL 資料格式、樣本數、CUDA、NVID
 
 不要自動修改 BIOS、CPU/GPU 電壓或硬體時脈，也不要把提高 Process Priority 稱作硬體超頻。
 
-## 15. 產品誠實性要求
+## 15. 本機 Windows 發佈
+
+- 正式使用者入口只有 Native Windows Desktop。
+- CI 必須在 Windows 建置 `AIHub.exe`。
+- 發行包必須包含主 EXE 與主程式在 frozen 狀態下需要的 helper executables，不可依賴把主 EXE 當成 Python interpreter 執行外部 `.py` 檔。
+- 發行包名稱為 `AIHub-Windows.zip`，可由 GitHub Actions artifact 下載；建立 `v*` tag 時附加到 GitHub Release。
+- 使用者解壓後應可直接開啟 `AIHub.exe`；Codex/Gemini CLI 可由 `setup.ps1` 初始化。
+- 一般 AI Hub 使用不得強制要求系統安裝 Python；只有 QLoRA 等本來就需要完整 ML 環境的進階功能可要求外部 Python/CUDA 環境。
+- SQLite、settings、下載、模型 metadata 與 task data 應保存於本機發行目錄的資料區，不依賴遠端 Web server。
+
+## 16. 產品誠實性要求
 
 任何功能都必須依真實狀態顯示：
 
@@ -189,4 +201,4 @@ QLoRA 訓練前必須真實檢查：JSONL 資料格式、樣本數、CUDA、NVID
 - 有帳號工作流 ≠ 第三方服務提供可完全自動化的官方 API。
 - 成功率模型存在 ≠ 一定比舊版準；需 benchmark 證明。
 
-最終目標是讓 AI Hub 成為一套真正可執行、可驗證、可恢復、可追蹤、可多 AI 協作，而且具有大範圍本機能力但仍保留關鍵操作核准邊界的 Windows AI Operator Console。
+最終目標是讓 AI Hub 成為一套可以直接下載到 Windows、本機執行、可驗證、可恢復、可追蹤、可多 AI 協作，而且具有大範圍本機能力但仍保留關鍵操作核准邊界的 Windows AI Operator Console。
