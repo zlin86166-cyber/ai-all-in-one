@@ -1,4 +1,4 @@
-param([int]$RestartDelaySeconds = 8,[switch]$Web)
+param([int]$RestartDelaySeconds = 8)
 $ErrorActionPreference='Continue'; $appRoot=Split-Path -Parent $MyInvocation.MyCommand.Path; $dataRoot=Join-Path $appRoot 'data'
 $stopFile=Join-Path $dataRoot 'watchdog.stop'; $normalExit=Join-Path $dataRoot 'normal-exit.marker'; $logFile=Join-Path $dataRoot 'watchdog.log'
 New-Item -ItemType Directory -Path $dataRoot -Force | Out-Null; Remove-Item $stopFile -Force -ErrorAction SilentlyContinue
@@ -10,7 +10,7 @@ $crashes=New-Object System.Collections.Generic.List[datetime]; Write-WatchdogLog
 while(-not (Test-Path $stopFile)){
   Remove-Item $normalExit -Force -ErrorAction SilentlyContinue
   try{
-    $arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $appRoot 'start.ps1'),'-NoElevate'); if($Web){$arguments+='-Web'}
+    $arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $appRoot 'start.ps1'))
     $process=Start-Process powershell.exe -ArgumentList $arguments -WorkingDirectory $appRoot -PassThru; $process.WaitForExit(); Write-WatchdogLog "AI Hub exited code=$($process.ExitCode)"
   }catch{ Write-WatchdogLog "launch failed: $($_.Exception.Message)" }
   if(Test-Path $normalExit){ Write-WatchdogLog 'normal user shutdown detected; watchdog stops'; break }
