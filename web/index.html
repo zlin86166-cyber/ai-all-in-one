@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="本機多模型 AI 工作台">
+  <title>AI Hub</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主要導覽">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2.8 14.4 9l6.2 2.4-6.2 2.4L12 20l-2.4-6.2-6.2-2.4L9.6 9 12 2.8Z"/><circle cx="18.4" cy="5.5" r="1.7"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">AI Hub</div>
+          <div class="brand-subtitle">Local workspace</div>
+        </div>
+        <button class="icon-button sidebar-collapse" id="sidebar-collapse" aria-label="收合側欄" title="收合側欄">
+          <svg viewBox="0 0 24 24"><path d="m14 7-5 5 5 5"/></svg>
+        </button>
+      </div>
+
+      <button class="new-chat-button" id="new-chat">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span>新增對話</span>
+        <kbd>Ctrl N</kbd>
+      </button>
+
+      <nav class="main-nav" id="main-nav">
+        <button class="nav-item active" data-view="chat">
+          <svg viewBox="0 0 24 24"><path d="M20 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4v8Z"/></svg>
+          <span>對話</span>
+        </button>
+        <button class="nav-item" data-view="team">
+          <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="7" r="2.5"/><path d="M2.5 20v-2a5.5 5.5 0 0 1 11 0v2M14 13.5a4.5 4.5 0 0 1 7.5 3.4V19"/></svg>
+          <span>AI 協作</span>
+        </button>
+        <button class="nav-item" data-view="tasks">
+          <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>
+          <span>執行進度</span>
+          <span class="nav-badge hidden" id="active-task-count">0</span>
+        </button>
+        <button class="nav-item" data-view="models">
+          <svg viewBox="0 0 24 24"><path d="M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3Z"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <span>模型與連線</span>
+        </button>
+        <button class="nav-item" data-view="images">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3.5 3 2.5-2 5 4"/></svg>
+          <span>AI 繪圖</span>
+        </button>
+        <button class="nav-item" data-view="automations">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2M8 2h8"/></svg>
+          <span>全天候排程</span>
+        </button>
+        <button class="nav-item" data-view="research">
+          <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7v7M7 10.5h7"/></svg>
+          <span>自動研究</span>
+        </button>
+        <button class="nav-item" data-view="permissions">
+          <svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.2 8.4-8 10-4.8-1.6-8-5-8-10V6l8-3.5Z"/><path d="m8.5 12 2.3 2.3 4.7-5"/></svg>
+          <span>權限中心</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-section-header">
+        <span>最近對話</span>
+        <button class="tiny-button" id="refresh-chats" title="重新整理">
+          <svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.6-2.2L20 8M4 16l2.3 2.2A7 7 0 0 0 18 16"/></svg>
+        </button>
+      </div>
+      <div class="conversation-list" id="conversation-list"></div>
+
+      <div class="sidebar-footer">
+        <button class="profile-row" data-view="settings">
+          <span class="avatar">HL</span>
+          <span class="profile-copy">
+            <strong>Home AI</strong>
+            <small id="sidebar-status">正在檢查連線</small>
+          </span>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="mobile-menu" aria-label="開啟選單">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="project-control">
+          <span class="project-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3v-12Z"/></svg>
+          </span>
+          <select id="project-select" aria-label="目前專案"></select>
+          <button class="tiny-button" id="add-project" title="開啟其他專案">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+        <div class="topbar-divider"></div>
+        <div class="current-title" id="current-title">新對話</div>
+        <div class="topbar-actions">
+          <button class="soft-button" id="open-terminal">
+            <svg viewBox="0 0 24 24"><path d="m5 7 4.5 5L5 17M12 17h7"/></svg>
+            <span>終端機</span>
+          </button>
+          <button class="soft-button" id="open-files">
+            <svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3v-12Z"/></svg>
+            <span>檔案</span>
+            <span class="selection-count hidden" id="selection-count">0</span>
+          </button>
+          <button class="icon-button" id="export-conversation" title="匯出目前對話">
+            <svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>
+          </button>
+          <button class="icon-button" id="more-menu" title="更多">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="content-grid">
+        <section class="view-stack">
+          <div class="view active" id="view-chat" data-view-panel="chat">
+            <div class="chat-scroll" id="chat-scroll">
+              <div class="empty-state" id="empty-state">
+                <div class="empty-orbit">
+                  <div class="brand-mark large"><svg viewBox="0 0 24 24"><path d="M12 2.8 14.4 9l6.2 2.4-6.2 2.4L12 20l-2.4-6.2-6.2-2.4L9.6 9 12 2.8Z"/><circle cx="18.4" cy="5.5" r="1.7"/></svg></div>
+                </div>
+                <h1>今天要完成什麼？</h1>
+                <p>選擇一個或多個 AI，直接對話、處理專案、修改檔案，或讓它們先規劃再合作。</p>
+                <div class="starter-grid">
+                  <button class="starter" data-prompt="先完整檢查目前專案，列出最重要的三個問題與可驗證修正順序。">
+                    <svg viewBox="0 0 24 24"><path d="M4 19V5h16v14H4ZM8 9h8M8 13h5"/></svg>
+                    <span><strong>檢查專案</strong><small>找出風險與修正順序</small></span>
+                  </button>
+                  <button class="starter" data-prompt="讀取我選取的檔案，保留原意並完成需求；修改後執行相關測試。">
+                    <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                    <span><strong>處理檔案</strong><small>先從右上角選取檔案</small></span>
+                  </button>
+                  <button class="starter" data-prompt="由我選取的 AI 先評估成功率，再規劃分工、依序實作並互相驗證。" data-collaboration="true">
+                    <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="7" r="2.5"/><path d="M2.5 20v-2a5.5 5.5 0 0 1 11 0v2M14 13.5a4.5 4.5 0 0 1 7.5 3.4V19"/></svg>
+                    <span><strong>啟動 AI 團隊</strong><small>規劃、分工、交叉驗證</small></span>
+                  </button>
+                </div>
+              </div>
+              <div class="messages" id="messages"></div>
+              <div class="live-tasks" id="live-tasks"></div>
+            </div>
+
+            <div class="composer-zone">
+              <div class="selected-files" id="selected-files"></div>
+              <div class="composer">
+                <textarea id="prompt-input" rows="1" placeholder="交代工作，或輸入 @ 選擇檔案…" aria-label="訊息"></textarea>
+                <div class="composer-footer">
+                  <div class="composer-tools">
+                    <button class="composer-tool" id="attach-file" title="選擇檔案">
+                      <svg viewBox="0 0 24 24"><path d="m8 12 5.6-5.6a3 3 0 0 1 4.2 4.2L10 18.4a4.5 4.5 0 0 1-6.4-6.4l7.7-7.7"/></svg>
+                    </button>
+                    <button class="provider-picker" id="provider-picker" aria-expanded="false">
+                      <span class="provider-dots" id="provider-dots"></span>
+                      <span id="provider-picker-label">選擇 AI</span>
+                      <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+                    </button>
+                    <button class="mode-chip" id="collaboration-toggle" aria-pressed="false">
+                      <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="2.5"/><circle cx="16.5" cy="7.5" r="2"/><path d="M3 19v-1.5a5 5 0 0 1 10 0V19M14 13a4 4 0 0 1 7 2.7V18"/></svg>
+                      協作
+                    </button>
+                  </div>
+                  <div class="composer-actions">
+                    <select id="permission-select" class="permission-select" aria-label="權限模式">
+                      <option value="observe">僅查看</option>
+                      <option value="workspace" selected>專案可寫入</option>
+                      <option value="full">完整系統權限</option>
+                    </select>
+                    <button class="send-button" id="send-message" aria-label="送出">
+                      <svg viewBox="0 0 24 24"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="composer-hint"><span id="composer-status">Enter 送出 · Shift Enter 換行</span><span>所有檔案與對話預設只留在本機</span></div>
+              <div class="provider-menu hidden" id="provider-menu"></div>
+            </div>
+          </div>
+
+          <div class="view page-view" id="view-team" data-view-panel="team">
+            <div class="page-header">
+              <div><span class="eyebrow">ORCHESTRATION</span><h1>AI 協作</h1><p>由第一個選取的 AI 規劃順序與分工，只派給你選取的模型。</p></div>
+              <button class="primary-button" id="team-open-chat">開始協作任務</button>
+            </div>
+            <div class="team-flow" id="team-flow"></div>
+            <div class="section-grid two">
+              <article class="panel"><div class="panel-heading"><h2>協作規則</h2><span class="status-pill green">強制執行</span></div><div class="rule-list"><div><span>1</span><p><strong>先做可行性檢查</strong><small>依硬體、依賴、權限、可測試性與過往結果評分。</small></p></div><div><span>2</span><p><strong>只使用選取的 AI</strong><small>計畫若指派未選模型會直接拒絕。</small></p></div><div><span>3</span><p><strong>避免寫入衝突</strong><small>只有研究、分析、測試與審查可以並行。</small></p></div><div><span>4</span><p><strong>第二模型監看</strong><small>實際讀取專案並重跑最相關測試。</small></p></div></div></article>
+              <article class="panel"><div class="panel-heading"><h2>本輪 AI</h2><button class="text-button" id="team-edit-providers">調整</button></div><div id="team-provider-list" class="team-provider-list"></div><label class="switch-row"><span><strong>交叉監看</strong><small>完成後由另一個已選 AI 驗證</small></span><input type="checkbox" id="peer-review-toggle" checked><i></i></label></article>
+            </div>
+          </div>
+
+          <div class="view page-view" id="view-tasks" data-view-panel="tasks">
+            <div class="page-header"><div><span class="eyebrow">LIVE EXECUTION</span><h1>執行進度</h1><p>查看每個 AI 的階段、預估時間、結束時間與完整事件。</p></div><button class="soft-button" id="refresh-tasks">重新整理</button></div>
+            <div class="metric-strip" id="task-metrics"></div>
+            <div class="task-list full" id="task-list"></div>
+          </div>
+
+          <div class="view page-view" id="view-models" data-view-panel="models">
+            <div class="page-header"><div><span class="eyebrow">MODELS & RUNTIMES</span><h1>模型與連線</h1><p>雲端 CLI、本機 Ollama、Kimi / DeepSeek 與自訂 OpenAI-compatible 節點。</p></div><button class="primary-button" id="install-clis">安裝 CLI</button></div>
+            <div class="connection-grid" id="connection-grid"></div>
+            <div class="section-title"><div><h2>本機模型目錄</h2><p>依這台電腦的實際 RAM、VRAM 與磁碟空間判定。</p></div></div>
+            <div class="model-grid" id="model-grid"></div>
+            <article class="hardware-note" id="training-readiness"></article>
+          </div>
+
+          <div class="view page-view" id="view-images" data-view-panel="images">
+            <div class="page-header"><div><span class="eyebrow">COMFYUI WORKSPACE</span><h1>AI 繪圖</h1><p>連接本機或遠端 ComfyUI，以標準工作流生成、保存、追蹤與排程圖片。</p></div><button class="soft-button" id="refresh-images">重新檢查節點</button></div>
+            <div class="section-grid two image-workspace">
+              <article class="panel image-form-panel">
+                <div class="panel-heading"><h2>建立圖片</h2><span class="status-pill" id="image-node-state">檢查中</span></div>
+                <label>提示<textarea id="image-prompt" rows="5" placeholder="描述主體、構圖、光線、材質與畫面風格"></textarea></label>
+                <label>負面提示<textarea id="image-negative" rows="2">low quality, blurry, distorted, watermark, text</textarea></label>
+                <label>Checkpoint<select id="image-checkpoint"><option value="">尚未連線</option></select></label>
+                <div class="form-grid image-options"><label>寬度<input id="image-width" type="number" value="768" min="256" max="2048" step="64"></label><label>高度<input id="image-height" type="number" value="768" min="256" max="2048" step="64"></label><label>步數<input id="image-steps" type="number" value="24" min="1" max="80"></label></div>
+                <button class="primary-button wide" id="generate-image">開始繪圖</button>
+              </article>
+              <article class="panel image-node-panel"><span class="panel-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4zM8 10h.01M12 10h4M8 14h8"/></svg></span><h2>繪圖節點</h2><p id="image-node-detail">正在檢查 ComfyUI…</p><div class="image-node-facts"><span>輸出位置<strong>data/generated</strong></span><span>排程<strong>全天候頁面可設定</strong></span><span>安全範圍<strong>只寫入本機輸出資料夾</strong></span></div><button class="soft-button" id="image-settings-link">設定節點 URL</button></article>
+            </div>
+            <div class="section-title"><div><h2>生成紀錄</h2><p>完成的圖片保存在本機；點擊可開啟原圖。</p></div></div>
+            <div class="image-gallery" id="image-gallery"></div>
+          </div>
+
+          <div class="view page-view" id="view-automations" data-view-panel="automations">
+            <div class="page-header"><div><span class="eyebrow">24 / 7</span><h1>全天候排程</h1><p>在指定時段自行找出小範圍改善；保留原意，不部署、不操作帳號。</p></div><button class="primary-button" id="new-schedule">新增排程</button></div>
+            <div class="schedule-list" id="schedule-list"></div>
+            <article class="panel startup-panel"><div><span class="panel-icon"><svg viewBox="0 0 24 24"><path d="M12 3v9M8 8l4 4 4-4M5 14v5h14v-5"/></svg></span><div><h3>隨 Windows 啟動</h3><p>安裝登入排程後，只要電腦在線並有電源，工作台可持續執行。</p></div></div><button class="soft-button" id="startup-help">查看安裝方式</button></article>
+          </div>
+
+          <div class="view page-view" id="view-research" data-view-panel="research">
+            <div class="page-header"><div><span class="eyebrow">LOCAL RESEARCH</span><h1>自動研究</h1><p>擷取允許的公開網頁供本機模型使用，遵守 robots.txt 並保留來源。</p></div></div>
+            <article class="panel research-control"><label class="switch-row"><span><strong>對話中的網址自動擷取</strong><small>啟用後只擷取提示內的公開 URL，並將相關索引加入當次上下文。</small></span><input type="checkbox" id="crawler-enabled"><i></i></label></article>
+            <article class="panel research-form"><label for="research-url">擷取網址</label><div class="inline-form"><input id="research-url" type="url" placeholder="https://example.com/docs"><button class="primary-button" id="fetch-research">擷取並索引</button></div><small>單頁上限 2 MB；不繞過登入、付費牆或網站限制。</small></article>
+            <div class="section-title"><div><h2>本機研究庫</h2><p>內容存在 data/ai-hub.sqlite3，不會自動上傳。</p></div></div>
+            <div class="research-list" id="research-list"></div>
+          </div>
+
+          <div class="view page-view" id="view-permissions" data-view-panel="permissions">
+            <div class="page-header"><div><span class="eyebrow">CONTROL PLANE</span><h1>權限中心</h1><p>能力可以很大，但每次帳號、發布、系統與不可逆動作都有清楚紀錄。</p></div><div class="permission-state" id="permission-state"></div></div>
+            <div class="permission-cards">
+              <article class="permission-card" data-permission="observe"><span class="permission-icon"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg></span><h3>僅查看</h3><p>讀取專案、分析、規劃與執行不寫入的測試。</p><ul><li>專案讀取</li><li>網路研究</li><li>無檔案變更</li></ul><button class="soft-button permission-use" data-mode="observe">設為預設</button></article>
+              <article class="permission-card recommended" data-permission="workspace"><span class="recommend-tag">建議</span><span class="permission-icon"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3v-12Z"/><path d="m9 14 2 2 4-4"/></svg></span><h3>專案可寫入</h3><p>可修改目前專案、下載依賴、執行測試與終端命令。</p><ul><li>專案內完整操作</li><li>CLI 與網路</li><li>外部帳號仍需核准</li></ul><button class="soft-button permission-use" data-mode="workspace">設為預設</button></article>
+              <article class="permission-card danger" data-permission="full"><span class="permission-icon"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.2 8.4-8 10-4.8-1.6-8-5-8-10V6l8-3.5Z"/><path d="M8 12h8M12 8v8"/></svg></span><h3>完整系統權限</h3><p>可在整台電腦執行程式、修改本機內容、使用網路與已登入工具。</p><ul><li>全檔案系統與應用程式</li><li>Codex / Gemini 高權限模式</li><li>30 分鐘工作階段解鎖</li></ul><button class="danger-button" id="unlock-full-access">解鎖完整權限</button></article>
+            </div>
+            <div class="section-grid two permissions-bottom"><article class="panel"><div class="panel-heading"><h2>待核准</h2><span class="count-pill" id="approval-count">0</span></div><div id="approval-list" class="approval-list"></div></article><article class="panel"><div class="panel-heading"><h2>系統稽核</h2><button class="text-button" id="refresh-audit">重新整理</button></div><div id="audit-list" class="audit-list"></div></article></div>
+          </div>
+
+          <div class="view page-view" id="view-settings" data-view-panel="settings">
+            <div class="page-header"><div><span class="eyebrow">SETTINGS</span><h1>設定</h1><p>連線端點、執行策略與資源控制。</p></div><button class="primary-button" id="save-settings">儲存設定</button></div>
+            <div class="settings-layout">
+              <article class="panel settings-panel"><h2>其他開源 AI 相容端點</h2><label>OpenAI-compatible URL<input id="compatible-base-url" type="url"></label><label>模型名稱<input id="compatible-model" placeholder="例如本機 vLLM 模型名稱"></label><label>API Key 環境變數<input id="compatible-key-env" value="AI_HUB_API_KEY"></label></article>
+              <article class="panel settings-panel"><h2>ComfyUI 繪圖節點</h2><label>Base URL<input id="comfyui-base-url" type="url" placeholder="http://127.0.0.1:8188"></label><label>預設 Checkpoint<input id="comfyui-checkpoint" placeholder="由 AI 繪圖頁面自動列出"></label><small>可連接本機或遠端 GPU。金鑰與反向代理認證請在節點端處理。</small></article>
+              <article class="panel settings-panel"><h2>執行策略</h2><label class="switch-row"><span><strong>預設允許網路</strong><small>傳給支援網路能力的 CLI</small></span><input type="checkbox" id="setting-web"><i></i></label><label class="switch-row"><span><strong>AI 交叉監看</strong><small>協作完成後由第二模型驗證</small></span><input type="checkbox" id="setting-peer-review"><i></i></label><label>同時工作的 AI 上限<input id="setting-parallel" type="number" min="1" max="6"></label></article>
+              <article class="panel settings-panel"><h2>資源控制</h2><label class="switch-row"><span><strong>接電時自適應效能</strong><small>高記憶體負載時提高本程式優先級；不修改硬體時脈</small></span><input type="checkbox" id="setting-performance"><i></i></label><label>記憶體觸發門檻<input id="setting-memory-threshold" type="number" min="70" max="98"><span class="input-suffix">%</span></label></article>
+            </div>
+          </div>
+        </section>
+
+        <aside class="inspector" id="inspector">
+          <div class="inspector-header"><h2>工作狀態</h2><button class="tiny-button" id="collapse-inspector"><svg viewBox="0 0 24 24"><path d="m10 7 5 5-5 5"/></svg></button></div>
+          <section class="inspector-section">
+            <div class="section-label"><span>系統</span><span class="live-dot">LIVE</span></div>
+            <div class="resource-row"><div><span>記憶體</span><strong id="memory-value">—</strong></div><div class="meter"><i id="memory-meter"></i></div></div>
+            <div class="resource-row"><div><span>CPU</span><strong id="cpu-value">—</strong></div><div class="meter"><i id="cpu-meter"></i></div></div>
+            <div class="system-foot"><span id="power-state">檢查電源…</span><span id="disk-state">— GB 可用</span></div>
+          </section>
+          <section class="inspector-section">
+            <div class="section-label"><span>選取的 AI</span><button class="text-button" id="inspector-edit-ai">編輯</button></div>
+            <div class="selected-agents" id="selected-agents"></div>
+          </section>
+          <section class="inspector-section" id="feasibility-section">
+            <div class="section-label"><span>執行前判定</span><span class="method-tag">ADAPTIVE</span></div>
+            <div class="score-ring" id="score-ring"><span id="score-value">—</span><small>/ 100</small></div>
+            <div class="score-copy"><strong id="score-label">尚未評估</strong><span id="score-confidence">送出工作後顯示信心度</span></div>
+            <div class="factor-mini-list" id="factor-mini-list"></div>
+          </section>
+          <section class="inspector-section current-run" id="current-run">
+            <div class="section-label"><span>目前工作</span><span id="run-status">待命</span></div>
+            <div class="run-empty" id="run-empty">尚無執行中的工作</div>
+            <div class="run-detail hidden" id="run-detail"><div class="run-title" id="run-title"></div><div class="large-progress"><i id="run-progress"></i></div><div class="run-times"><span><small>預估剩餘</small><strong id="run-eta">—</strong></span><span><small>預計結束</small><strong id="run-end">—</strong></span></div></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+  <aside class="file-drawer hidden" id="file-drawer" aria-label="專案檔案">
+    <div class="drawer-header"><div><span class="eyebrow">PROJECT FILES</span><h2>選擇動作範圍</h2></div><button class="icon-button" id="close-files"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="file-toolbar"><button class="icon-button" id="file-up" title="上一層"><svg viewBox="0 0 24 24"><path d="m7 14 5-5 5 5"/></svg></button><div class="file-path" id="file-path">—</div><button class="icon-button" id="file-import" title="匯入檔案"><svg viewBox="0 0 24 24"><path d="M12 20V9M8 13l4-4 4 4M5 5h14"/></svg></button><input class="hidden" id="file-import-input" type="file" multiple><button class="icon-button" id="file-refresh"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.6-2.2L20 8M4 16l2.3 2.2A7 7 0 0 0 18 16"/></svg></button><button class="icon-button" id="file-open-explorer" title="在檔案總管開啟"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3v-12Z"/><path d="M14 5h5v5M19 5l-7 7"/></svg></button></div>
+    <div class="file-columns"><span>名稱</span><span>修改時間</span><span>大小</span></div>
+    <div class="file-list" id="file-list"></div>
+    <div class="file-preview hidden" id="file-preview"><div class="preview-header"><strong id="preview-name"></strong><button class="text-button" id="close-preview">關閉預覽</button></div><pre id="preview-content"></pre></div>
+    <div class="drawer-footer"><span id="drawer-selection-label">尚未選取檔案</span><button class="primary-button" id="use-selected-files">加入對話</button></div>
+  </aside>
+
+  <aside class="terminal-drawer hidden" id="terminal-drawer" aria-label="終端機">
+    <div class="terminal-header"><div><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span><strong>PowerShell · <span id="terminal-project">project</span></strong></div><button class="icon-button dark" id="close-terminal"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="terminal-output" id="terminal-output"><div class="terminal-welcome">AI Hub terminal ready. 高風險命令會先要求一次性核准。</div></div>
+    <form class="terminal-form" id="terminal-form"><span>PS&gt;</span><input id="terminal-input" autocomplete="off" spellcheck="false" placeholder="輸入 PowerShell 命令"><button>執行</button></form>
+  </aside>
+
+  <dialog class="modal" id="project-modal">
+    <form method="dialog" class="modal-card" id="project-form"><div class="modal-icon"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3v-12Z"/><path d="M12 11v5M9.5 13.5h5"/></svg></div><h2>開啟其他專案</h2><p>選擇本機資料夾後，AI 的預設檔案範圍會限制在該專案。</p><label>資料夾路徑<div class="input-with-button"><input id="project-path" required placeholder="C:\Projects\my-app"><button type="button" id="native-folder-picker">瀏覽…</button></div></label><label>顯示名稱（選填）<input id="project-name" placeholder="My project"></label><div class="modal-actions"><button type="button" class="soft-button" id="cancel-project">取消</button><button type="submit" class="primary-button" id="confirm-project">開啟專案</button></div></form>
+  </dialog>
+
+  <dialog class="modal" id="approval-modal">
+    <div class="modal-card approval-modal-card"><div class="modal-icon warning"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17.5v.1"/></svg></div><span class="eyebrow">ONE-TIME APPROVAL</span><h2>需要你的同意</h2><p id="approval-summary"></p><div class="approval-payload" id="approval-payload"></div><div class="modal-actions"><button class="soft-button" id="reject-approval">拒絕</button><button class="danger-button" id="approve-action">只允許這一次</button></div></div>
+  </dialog>
+
+  <dialog class="modal" id="full-access-modal">
+    <div class="modal-card full-access-card"><div class="modal-icon danger"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.2 8.4-8 10-4.8-1.6-8-5-8-10V6l8-3.5Z"/><path d="M8 12h8M12 8v8"/></svg></div><span class="eyebrow">UNRESTRICTED LOCAL CONTROL</span><h2>解鎖完整系統權限</h2><p>解鎖後，選取的 AI 可在 30 分鐘內存取專案外檔案、執行本機程式與使用已登入 CLI。帳號發布、系統設定與不可逆命令仍會顯示一次性核准。</p><div class="warning-box"><strong>你仍可隨時停止</strong><span>右側進度卡與執行頁都能立即送出停止訊號，所有動作寫入本機稽核紀錄。</span></div><label>輸入「我同意完整系統權限」<input id="full-access-phrase" autocomplete="off"></label><div class="modal-actions"><button class="soft-button" id="cancel-full-access">取消</button><button class="danger-button" id="confirm-full-access" disabled>解鎖 30 分鐘</button></div></div>
+  </dialog>
+
+  <dialog class="modal" id="task-modal">
+    <div class="modal-card task-modal-card"><div class="modal-header"><div><span class="eyebrow" id="task-modal-provider">TASK</span><h2 id="task-modal-title">工作詳情</h2></div><button class="icon-button" id="close-task-modal"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="task-modal-progress"><div><span id="task-modal-stage">—</span><strong id="task-modal-percent">0%</strong></div><div class="large-progress"><i id="task-modal-bar"></i></div></div><div class="event-stream" id="event-stream"></div><div class="modal-actions"><button class="danger-ghost hidden" id="cancel-task">停止工作</button><button class="primary-button" id="done-task-modal">完成</button></div></div>
+  </dialog>
+
+  <dialog class="modal" id="schedule-modal">
+    <form method="dialog" class="modal-card schedule-card" id="schedule-form"><span class="eyebrow">NEW AUTOMATION</span><h2>新增全天候排程</h2><label>類型<select id="schedule-mode"><option value="improve">專案小範圍改善</option><option value="image">ComfyUI 持續繪圖</option></select></label><label>名稱<input id="schedule-name" required placeholder="每日程式品質改善"></label><label>工作內容 / 繪圖提示<textarea id="schedule-prompt" required rows="3" placeholder="檢查效能、可維護性與測試缺口，每次只完成一個小範圍改善。"></textarea></label><div class="form-grid"><label>開始時間<input type="time" id="schedule-start" value="01:00"></label><label>結束時間<input type="time" id="schedule-end" value="05:00"></label><label>每隔（分鐘）<input type="number" id="schedule-interval" value="1440" min="5" max="10080"></label><label>單次上限（分鐘）<input type="number" id="schedule-duration" value="60" min="1" max="480"></label></div><div id="schedule-provider-section"><span class="field-label">使用目前選取的 AI</span><div id="schedule-providers" class="team-provider-list compact"></div></div><div class="modal-actions"><button type="button" class="soft-button" id="cancel-schedule">取消</button><button type="submit" class="primary-button" id="save-schedule">建立排程</button></div></form>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

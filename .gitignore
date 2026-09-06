@@ -1,0 +1,10 @@
+.runtime/
+data/*.sqlite3
+data/*.sqlite3-*
+data/settings.json
+data/downloads/
+__pycache__/
+*.pyc
+training/output/
+training/cache/
+.build/
