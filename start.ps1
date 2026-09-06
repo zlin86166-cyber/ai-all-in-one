@@ -2,7 +2,8 @@ param(
     [switch]$Web,
     [int]$Port = 8765,
     [switch]$NoBrowser,
-    [switch]$NoElevate
+    [switch]$NoElevate,
+    [switch]$PreferExe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,7 @@ if (-not $NoElevate -and -not $isAdministrator) {
     $restartArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -NoElevate"
     if ($Web) { $restartArguments += ' -Web' }
     if ($NoBrowser) { $restartArguments += ' -NoBrowser' }
+    if ($PreferExe) { $restartArguments += ' -PreferExe' }
     $restartArguments += " -Port $Port"
     Start-Process -FilePath 'powershell.exe' -ArgumentList $restartArguments -Verb RunAs -WindowStyle Hidden
     exit 0
@@ -22,10 +24,8 @@ if (-not $NoElevate -and -not $isAdministrator) {
 
 $runtimeRoot = Join-Path $appRoot '.runtime'
 $cliBin = Join-Path $runtimeRoot 'cli\node_modules\.bin'
-$openAIBin = Join-Path $runtimeRoot 'openai-cli'
 $pathParts = [System.Collections.Generic.List[string]]::new()
 if (Test-Path -LiteralPath $cliBin) { $pathParts.Add($cliBin) }
-if (Test-Path -LiteralPath $openAIBin) { $pathParts.Add($openAIBin) }
 $portableNode = Get-ChildItem -LiteralPath (Join-Path $runtimeRoot 'node') -Filter node.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($portableNode) { $pathParts.Add($portableNode.Directory.FullName) }
 $bundledNode = 'C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin'
@@ -46,17 +46,15 @@ try {
     }
     else {
         $desktopExecutable = Join-Path $appRoot 'AIHub.exe'
-        if (Test-Path -LiteralPath $desktopExecutable) {
+        $geekEntry = Join-Path $appRoot 'desktop_geek.py'
+        if ($PreferExe -and (Test-Path -LiteralPath $desktopExecutable)) {
             & $desktopExecutable '--max-control'
         }
         else {
             $pythonWindow = Get-Command pythonw -ErrorAction SilentlyContinue
-            if ($pythonWindow) {
-                & $pythonWindow.Source (Join-Path $appRoot 'desktop.py') '--max-control'
-            }
-            else {
-                & $pythonCommand.Source (Join-Path $appRoot 'desktop.py') '--max-control'
-            }
+            $entry = if (Test-Path -LiteralPath $geekEntry) { $geekEntry } else { Join-Path $appRoot 'desktop.py' }
+            if ($pythonWindow) { & $pythonWindow.Source $entry '--max-control' }
+            else { & $pythonCommand.Source $entry '--max-control' }
         }
     }
 }
