@@ -2,7 +2,8 @@ param(
     [switch]$InstallCli,
     [switch]$InstallRecommendedModel,
     [switch]$CreateDesktopShortcut,
-    [switch]$InstallStartup
+    [switch]$InstallStartup,
+    [switch]$InstallWatchdog
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,10 +38,10 @@ function Install-AIHubPortableNode {
     return $installed.FullName
 }
 
-if (-not ($InstallCli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup)) {
+if (-not ($InstallCli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
     $InstallCli = $true
     $CreateDesktopShortcut = $true
-    $InstallStartup = $true
+    $InstallWatchdog = $true
 }
 
 if ($InstallCli) {
@@ -59,6 +60,13 @@ if ($InstallCli) {
     if (-not (Test-Path -LiteralPath $geminiLauncher)) { throw 'Gemini CLI launcher is missing after installation.' }
     Write-Host "Codex CLI: $codexLauncher"
     Write-Host "Gemini CLI: $geminiLauncher"
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        Write-Host 'Installing/updating Hugging Face CLI for official model downloads...'
+        & $python.Source -m pip install --disable-pip-version-check --upgrade 'huggingface_hub[cli]'
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'huggingface_hub installation failed; model metadata sync still works, direct HF download may require manual CLI setup.' }
+    }
 }
 
 if ($InstallRecommendedModel) {
@@ -79,13 +87,16 @@ if ($CreateDesktopShortcut) {
     $shortcut.WorkingDirectory = $appRoot
     $desktopExecutable = Join-Path $appRoot 'AIHub.exe'
     $shortcut.IconLocation = if (Test-Path -LiteralPath $desktopExecutable) { "$desktopExecutable,0" } else { 'shell32.dll,14' }
-    $shortcut.Description = 'AI Hub native local multi-model control deck'
+    $shortcut.Description = 'AI Hub local multi-model operator console'
     $shortcut.Save()
     Write-Host "Desktop shortcut: $shortcutPath"
 }
 
-if ($InstallStartup) {
+if ($InstallStartup -and -not $InstallWatchdog) {
     & (Join-Path $appRoot 'install-startup.ps1')
 }
+if ($InstallWatchdog) {
+    & (Join-Path $appRoot 'install-watchdog.ps1')
+}
 
-Write-Host 'Setup complete. Run start.cmd to open the native AI Hub desktop.'
+Write-Host 'Setup complete. Run start.cmd to open AI Hub.'
