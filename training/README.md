@@ -18,3 +18,7 @@ AI Hub 把兩件事分開：
 ```bash
 python training/train_lora.py --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B --dataset training/data.jsonl --output training/output/deepseek
 ```
+
+## Production training workflow
+
+`train_lora.py` now defaults to assistant-only loss, pins an optional Hugging Face revision, uses a deterministic seed, creates a validation split when there are at least 20 examples (or accepts `--eval-dataset`), supports early stopping, checkpoint resume, saves `training-curve.json`, runs an adapter smoke test, and can optionally `--merge-output` to export merged safetensors. `trust_remote_code` is opt-in rather than automatic.

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from ai_hub.application import AIHubApplication, ApprovalRequired
@@ -472,7 +472,7 @@ class AIHubDesktop:
             ("測試", "python -m unittest discover -v"),
             ("檔案", "Get-ChildItem -Force"),
             ("GIT", "git status --short"),
-            ("環境", "Get-Command python,node,git,openai,codex,gemini,ollama -ErrorAction SilentlyContinue | Select-Object Name,Source"),
+            ("環境", "Get-Command python,node,git,codex,gemini,ollama -ErrorAction SilentlyContinue | Select-Object Name,Source"),
         ):
             ttk.Button(quick, text=label, command=lambda value=command: self.set_terminal_command(value)).pack(side=tk.LEFT, padx=3)
         ttk.Button(quick, text="開啟本機程式", command=self.launch_local_app).pack(side=tk.RIGHT)
@@ -554,7 +554,7 @@ class AIHubDesktop:
         tab = self.integrations_tab
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(0, weight=0)
-        tab.grid_rowconfigure(1, weight=1)
+        tab.grid_rowconfigure(2, weight=1)
         status_frame = ttk.Frame(tab, style="Panel2.TFrame", padding=9)
         status_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         status_frame.grid_columnconfigure(0, weight=1)
@@ -577,8 +577,19 @@ class AIHubDesktop:
         ttk.Button(status_frame, text="Codex 登入", command=lambda: self.open_cli_login("codex")).grid(row=1, column=2, padx=5, pady=(8, 0))
         ttk.Button(status_frame, text="Gemini 登入", style="Accent.TButton", command=lambda: self.open_cli_login("gemini")).grid(row=1, column=3, pady=(8, 0))
 
+        ops = ttk.LabelFrame(tab, text="Operator 整合與發布", style="TLabelframe", padding=10)
+        ops.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        ops.grid_columnconfigure(0, weight=1)
+        self.resource_policy_var = tk.StringVar(value="RESOURCE GOVERNOR // probing")
+        ttk.Label(ops, textvariable=self.resource_policy_var, style="PanelMuted.TLabel").grid(row=0, column=0, columnspan=5, sticky="w", pady=(0, 8))
+        ttk.Button(ops, text="同步 Kimi / DeepSeek", style="Accent.TButton", command=self.sync_official_models).grid(row=1, column=0, sticky="w")
+        ttk.Button(ops, text="Google Play", command=self.publish_google_play).grid(row=1, column=1, padx=5)
+        ttk.Button(ops, text="Google Sites", command=self.open_google_sites).grid(row=1, column=2, padx=5)
+        ttk.Button(ops, text="立即維護", command=self.run_maintenance_now).grid(row=1, column=3, padx=5)
+        ttk.Button(ops, text="重新檢查", command=lambda: self.refresh_providers(True)).grid(row=1, column=4, sticky="e")
+
         config = ttk.Frame(tab, style="Panel2.TFrame", padding=12)
-        config.grid(row=1, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        config.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5, 10))
         config.grid_columnconfigure(1, weight=1)
         config.grid_columnconfigure(3, weight=1)
         ttk.Label(config, text="開源推論節點與繪圖服務設定", style="Metric.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 9))
@@ -1735,6 +1746,16 @@ class AIHubDesktop:
             values = ("ComfyUI", "image", "PROBE", self.comfy_url.get())
             tag = "setup"
         self.integration_tree.insert("", tk.END, iid="comfyui", values=values, tags=(tag,))
+        integration_state = self.app.integrations.status()
+        play = integration_state.get("google_play", {})
+        self.integration_tree.insert("", tk.END, iid="google-play", values=("Google Play", "account", "READY" if play.get("token_present") else "TOKEN REQUIRED", play.get("mode")), tags=("online" if play.get("token_present") else "setup",))
+        self.integration_tree.insert("", tk.END, iid="google-sites", values=("Google Sites", "browser", "ASSISTED", "Modern Sites browser-assisted session"), tags=("online",))
+        sync = integration_state.get("model_sync", {})
+        self.integration_tree.insert("", tk.END, iid="model-sync", values=("Kimi / DeepSeek metadata", "models", "READY" if sync.get("metadata_present") else "SYNC REQUIRED", "official organization metadata"), tags=("online" if sync.get("metadata_present") else "setup",))
+        if hasattr(self, "resource_policy_var"):
+            policy = self.app.hardware.resource_policy(int(self.app.settings.get("max_parallel_agents", 3)))
+            reasons = " · ".join(policy.get("reasons") or [])
+            self.resource_policy_var.set(f"RESOURCE GOVERNOR // parallel={policy.get('max_parallel_agents')} // remote-first={policy.get('prefer_remote_model')} // {reasons}")
 
     def save_integrations(self) -> None:
         values = {
@@ -1759,6 +1780,53 @@ class AIHubDesktop:
         self._set_status("INTEGRATIONS // 設定已儲存")
         self.refresh_providers(True)
         self.refresh_comfy()
+
+    def sync_official_models(self) -> None:
+        if not self.current_project_id:
+            return
+        self._set_status("MODEL SYNC // official metadata")
+        self._async(
+            lambda: self.app.sync_models({"project_id": self.current_project_id, "conversation_id": self.current_conversation_id}),
+            lambda result: self._show_transfer_task(result, "官方模型同步"),
+        )
+
+    def publish_google_play(self) -> None:
+        if not self.current_project_id:
+            return
+        artifact = filedialog.askopenfilename(parent=self.root, title="選擇 APK / AAB", filetypes=(("Android artifacts", "*.apk *.aab"), ("All files", "*.*")))
+        if not artifact:
+            return
+        package = simpledialog.askstring("Google Play", "Package name", parent=self.root)
+        if not package:
+            return
+        track = simpledialog.askstring("Google Play", "Track (internal / alpha / beta / production)", initialvalue="internal", parent=self.root) or "internal"
+        status = simpledialog.askstring("Google Play", "Release status (draft / inProgress / halted / completed)", initialvalue="draft", parent=self.root) or "draft"
+        commit = messagebox.askyesno("Google Play", "要正式 COMMIT 這個 edit 嗎？\n\n選「否」只會 upload + validate。", icon="warning", parent=self.root)
+        payload = {"project_id": self.current_project_id, "conversation_id": self.current_conversation_id,
+                   "permission_mode": self.permission_var.get(), "package": package.strip(), "artifact": artifact,
+                   "track": track.strip(), "status": status.strip(), "commit": commit}
+        def builder(approval_id: str | None) -> dict[str, Any]:
+            return self.app.publish_play({**payload, "approval_id": approval_id})
+        self._guarded(builder, lambda result: self._show_transfer_task(result, "Google Play"))
+
+    def open_google_sites(self) -> None:
+        if not self.current_project_id:
+            return
+        title = simpledialog.askstring("Google Sites", "網站標題", parent=self.root)
+        if not title:
+            return
+        profile = simpledialog.askstring("Google Sites", "Chrome / Edge profile（選填，例如 Default）", parent=self.root)
+        payload = {"project_id": self.current_project_id, "conversation_id": self.current_conversation_id,
+                   "title": title.strip(), "profile": profile.strip() if profile else None}
+        def builder(approval_id: str | None) -> dict[str, Any]:
+            return self.app.open_sites({**payload, "approval_id": approval_id})
+        self._guarded(builder, lambda result: self._show_transfer_task(result, "Google Sites"))
+
+    def run_maintenance_now(self) -> None:
+        self._async(
+            lambda: self.app.run_maintenance({"permission_mode": self.permission_var.get()}),
+            lambda result: self._set_status(f"MAINTENANCE // backup={result.get('backup', 'ok')}"),
+        )
 
     def install_clis(self) -> None:
         setup = self.app.paths.root / "setup.ps1"

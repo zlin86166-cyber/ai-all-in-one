@@ -38,3 +38,17 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 - Rebuilt/modern Google Sites has no supported general-purpose write API; browser-assisted use is the honest integration path.
 - Hardware auto-overclocking is not treated as a software permission feature. AI Hub uses safe OS-level adaptive performance rather than BIOS/voltage/clock modification.
 - Feasibility accuracy superiority is a measured property, not a promise. Use the benchmark tool with the same labeled cases from the previous estimator.
+
+
+## Production completion pass (2026-09-06)
+
+- Permission model: hardened Observe / Workspace / Full, selected-file rollback guard, one-shot expiring approvals, loopback authenticated web control plane.
+- Reliability: crash recovery + collaboration checkpoint resume + watchdog normal-exit/crash-loop handling + scheduler overlap/cross-midnight handling.
+- Quality: structured peer-review gate with remediation; unverified task completion no longer trains feasibility calibration.
+- Progress: elapsed-time and output-line fake percentages removed; unknown progress is explicitly shown as event-driven/unknown.
+- Models: official dynamic Kimi/DeepSeek metadata is merged into the main catalog and exposed through the Operator UI.
+- Integrations: Google Play, Google Sites browser-assisted session, model sync, and maintenance are exposed in Web and Native Desktop and run through Task/Approval/Audit backends.
+- Training: revision pinning, deterministic seed, assistant-only loss, validation/eval loss, early stopping, resume, training curve, smoke test, optional merged export.
+- Production engineering: runtime data git hygiene, retention/backups, cross-platform CI, and Windows executable artifact build.
+
+Platform limits remain explicit: Modern Google Sites has no supported generic modern Sites write API; external-account flows need real user credentials/OAuth; real QLoRA execution requires compatible NVIDIA CUDA hardware; selected-file enforcement is rollback/snapshot based rather than a Windows kernel sandbox.

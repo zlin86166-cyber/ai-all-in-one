@@ -62,6 +62,10 @@
           <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7v7M7 10.5h7"/></svg>
           <span>自動研究</span>
         </button>
+        <button class="nav-item" data-view="integrations">
+          <svg viewBox="0 0 24 24"><path d="M8 7h8M8 17h8M5 4v6M19 14v6M5 14v6M19 4v6"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          <span>整合與發布</span>
+        </button>
         <button class="nav-item" data-view="permissions">
           <svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.2 8.4-8 10-4.8-1.6-8-5-8-10V6l8-3.5Z"/><path d="m8.5 12 2.3 2.3 4.7-5"/></svg>
           <span>權限中心</span>
@@ -245,6 +249,18 @@
             <div class="research-list" id="research-list"></div>
           </div>
 
+          <div class="view page-view" id="view-integrations" data-view-panel="integrations">
+            <div class="page-header"><div><span class="eyebrow">OPERATOR INTEGRATIONS</span><h1>整合、發布與資源治理</h1><p>正式後端能力直接進入 Task / Approval / Audit，不再只是獨立腳本。</p></div><button class="soft-button" id="refresh-integrations">重新整理狀態</button></div>
+            <div class="integration-status-grid" id="integration-status-grid"></div>
+            <article class="panel resource-policy-panel"><div class="panel-heading"><h2>Resource Governor</h2><span class="status-pill green">LIVE</span></div><div id="resource-policy" class="operator-policy"></div></article>
+            <div class="section-grid two operator-integrations">
+              <article class="panel"><div class="panel-heading"><h2>官方模型生命週期</h2><span class="status-pill">Kimi / DeepSeek ≤50B</span></div><p>同步官方 Hugging Face metadata，將 latest / largest eligible 直接合併到主模型目錄。</p><button class="primary-button wide" id="sync-official-models">同步官方模型目錄</button></article>
+              <article class="panel"><div class="panel-heading"><h2>本機資料維護</h2><span class="status-pill green">AUDITED</span></div><p>立即執行 SQLite backup、retention、research 去重、FTS 重建與圖片 quota 清理。</p><button class="soft-button wide" id="run-maintenance">立即維護</button></article>
+              <article class="panel integration-form-card"><div class="panel-heading"><h2>Google Play</h2><span class="status-pill warning">ACCOUNT APPROVAL</span></div><label>Package name<input id="play-package" placeholder="com.example.app"></label><label>APK / AAB 本機路徑<div class="input-with-button"><input id="play-artifact" placeholder="C:\build\app-release.aab"><button id="play-use-selected" type="button">用選取檔案</button></div></label><div class="form-grid"><label>Track<select id="play-track"><option>internal</option><option>alpha</option><option>beta</option><option>production</option></select></label><label>Status<select id="play-status"><option>draft</option><option>inProgress</option><option>halted</option><option>completed</option></select></label></div><label class="switch-row"><span><strong>正式 Commit</strong><small>關閉時只 upload + validate，不提交 edit。</small></span><input type="checkbox" id="play-commit"><i></i></label><button class="danger-button wide" id="publish-play">執行 Play 流程</button></article>
+              <article class="panel integration-form-card"><div class="panel-heading"><h2>Google Sites</h2><span class="status-pill">BROWSER ASSISTED</span></div><label>網站標題<input id="sites-title" placeholder="專案網站"></label><label>Chrome / Edge Profile（選填）<input id="sites-profile" placeholder="Default"></label><label>Template URL（選填）<input id="sites-template" type="url" placeholder="https://sites.new"></label><p class="form-note">Modern Google Sites 沒有受支援的一般寫入 API；AI Hub 會開啟經一次性核准的帳號工作階段，不偽造不存在的 API。</p><button class="primary-button wide" id="open-sites-session">開啟 Sites 工作階段</button></article>
+            </div>
+          </div>
+
           <div class="view page-view" id="view-permissions" data-view-panel="permissions">
             <div class="page-header"><div><span class="eyebrow">CONTROL PLANE</span><h1>權限中心</h1><p>能力可以很大，但每次帳號、發布、系統與不可逆動作都有清楚紀錄。</p></div><div class="permission-state" id="permission-state"></div></div>
             <div class="permission-cards">
@@ -323,7 +339,7 @@
   </dialog>
 
   <dialog class="modal" id="task-modal">
-    <div class="modal-card task-modal-card"><div class="modal-header"><div><span class="eyebrow" id="task-modal-provider">TASK</span><h2 id="task-modal-title">工作詳情</h2></div><button class="icon-button" id="close-task-modal"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="task-modal-progress"><div><span id="task-modal-stage">—</span><strong id="task-modal-percent">0%</strong></div><div class="large-progress"><i id="task-modal-bar"></i></div></div><div class="event-stream" id="event-stream"></div><div class="modal-actions"><button class="danger-ghost hidden" id="cancel-task">停止工作</button><button class="primary-button" id="done-task-modal">完成</button></div></div>
+    <div class="modal-card task-modal-card"><div class="modal-header"><div><span class="eyebrow" id="task-modal-provider">TASK</span><h2 id="task-modal-title">工作詳情</h2></div><button class="icon-button" id="close-task-modal"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="task-modal-progress"><div><span id="task-modal-stage">—</span><strong id="task-modal-percent">0%</strong></div><div class="large-progress"><i id="task-modal-bar"></i></div></div><div class="operator-task-details" id="task-operator-details"></div><div class="event-stream" id="event-stream"></div><div class="modal-actions"><button class="danger-ghost hidden" id="cancel-task">停止工作</button><button class="primary-button" id="done-task-modal">完成</button></div></div>
   </dialog>
 
   <dialog class="modal" id="schedule-modal">

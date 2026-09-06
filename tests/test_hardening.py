@@ -55,4 +55,25 @@ class HardeningTests(unittest.TestCase):
         with self.assertRaises(PermissionError): validate_network_url("http://example.test/")
 
 
+    def test_operator_ui_and_truthful_progress_contracts(self):
+        root = Path(__file__).resolve().parents[1]
+        web = (root / "web" / "index.html").read_text(encoding="utf-8")
+        app = (root / "web" / "app.js").read_text(encoding="utf-8")
+        providers = (root / "ai_hub" / "providers.py").read_text(encoding="utf-8")
+        self.assertIn('data-view="integrations"', web)
+        self.assertIn('/api/integrations/play', app)
+        self.assertIn('progressLabel(progress)', app)
+        self.assertNotIn('min(94, progress + 0.35)', providers)
+        self.assertNotIn('min(96, progress + 0.4)', providers)
+
+    def test_training_source_has_validation_and_assistant_masking(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "training" / "train_lora.py").read_text(encoding="utf-8")
+        self.assertIn('--eval-dataset', source)
+        self.assertIn('[-100]*mask', source)
+        self.assertIn('EarlyStoppingCallback', source)
+        self.assertIn('training-curve.json', source)
+        self.assertIn('smoke_test', source)
+
+
 if __name__=="__main__": unittest.main()

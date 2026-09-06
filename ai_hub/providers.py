@@ -275,25 +275,25 @@ class CodexProvider(BaseProvider):
             event_type = event.get("type", "event")
             if event_type in {"thread.started", "session.started"}:
                 session_id = event.get("thread_id") or event.get("session_id")
-                emit("工作階段已建立", session_id or "Codex session", 8, "info")
+                emit("工作階段已建立", session_id or "Codex session", None, "info")
                 return
             item = event.get("item") or {}
             item_type = item.get("type")
             if item_type in {"agent_message", "message"} and item.get("text"):
                 final_fragments.append(str(item["text"]))
-                emit("產生回覆", str(item["text"]), 88, "message")
+                emit("產生回覆", str(item["text"]), None, "message")
             elif item_type in {"command_execution", "mcp_tool_call", "file_change"}:
                 tool_count += 1
                 label = item.get("command") or item.get("name") or item_type
-                emit("執行工具", str(label)[:500], min(82, 18 + tool_count * 6), "tool")
+                emit("執行工具", str(label)[:500], None, "tool")
             elif event_type == "turn.completed":
-                emit("收尾與驗證", "Codex 已完成本輪工作", 96, "info")
+                emit("收尾與驗證", "Codex 已完成本輪工作", None, "info")
             elif event_type.endswith("failed"):
                 emit("Codex 錯誤", json.dumps(event, ensure_ascii=False)[:1500], None, "error")
             else:
                 emit("Codex 執行中", event_type, None, "debug")
 
-        emit("啟動 Codex", "使用 JSONL 事件串流", 3, "info")
+        emit("啟動 Codex", "使用 JSONL 事件串流", None, "info")
         prompt = _prompt_with_history(context)
         try:
             code, lines = _run_process(
@@ -347,7 +347,7 @@ class GeminiProvider(BaseProvider):
             arguments.extend(["--approval-mode", "auto_edit"])
         else:
             arguments.extend(["--approval-mode", "plan"])
-        emit("啟動 Gemini", "等待 Gemini CLI 回傳結構化結果", 4, "info")
+        emit("啟動 Gemini", "等待 Gemini CLI 回傳結構化結果", None, "info")
         code, lines = _run_process(
             _process_command(executable, arguments),
             context.project_path,
@@ -367,7 +367,7 @@ class GeminiProvider(BaseProvider):
             stats = payload.get("stats") or {}
         except json.JSONDecodeError:
             response, stats = raw, {}
-        emit("Gemini 完成", "已解析回覆與使用統計", 96, "info")
+        emit("Gemini 完成", "已解析回覆與使用統計", None, "info")
         return ProviderResult(text=str(response), metadata={"stats": stats})
 
 
@@ -391,7 +391,7 @@ class OllamaProvider(BaseProvider):
             f"{self.base_url}/api/chat", body, {"Content-Type": "application/json"}, method="POST"
         )
         fragments: list[str] = []
-        emit("啟動本機模型", f"載入 {self.model}", 3, "info")
+        emit("啟動本機模型", f"載入 {self.model}", None, "info")
         try:
             with urllib.request.urlopen(request, timeout=1800) as response:
                 for raw_line in response:
@@ -407,7 +407,7 @@ class OllamaProvider(BaseProvider):
                         if len(fragments) % 12 == 0:
                             emit("本機推論中", "".join(fragments[-12:]), None, "message-delta")
                     if event.get("done"):
-                        emit("本機模型完成", f"輸出 {event.get('eval_count', 0)} tokens", 96, "info")
+                        emit("本機模型完成", f"輸出 {event.get('eval_count', 0)} tokens", None, "info")
                         metadata = {
                             "eval_count": event.get("eval_count"),
                             "eval_duration": event.get("eval_duration"),
@@ -516,13 +516,9 @@ class ModelPullProvider(BaseProvider):
         if not executable:
             raise ProviderError("找不到 Ollama。")
         model = context.prompt.strip()
-        emit("下載模型", model, 2, "info")
-        progress = 2.0
-
+        emit("下載模型", model, None, "info")
         def parse(line: str) -> None:
-            nonlocal progress
-            progress = min(94, progress + 0.35)
-            emit("下載模型", line, progress, "output")
+            emit("下載模型", line, None, "output")
 
         code, lines = _run_process(
             _process_command(executable, ["pull", model]),
@@ -569,14 +565,10 @@ class HuggingFacePullProvider(BaseProvider):
             raise ProviderError("找不到 Hugging Face `hf` CLI；請先安裝 huggingface_hub。")
         target.mkdir(parents=True, exist_ok=True)
         arguments = (["download"] if legacy else ["download"]) + [repository, "--local-dir", str(target)]
-        emit("下載官方模型權重", repository, 2, "info")
-        progress = 2.0
-
+        emit("下載官方模型權重", repository, None, "info")
         def parse(line: str) -> None:
-            nonlocal progress
-            progress = min(96, progress + 0.18)
             if line.strip():
-                emit("Hugging Face 下載中", line[-1500:], progress, "output")
+                emit("Hugging Face 下載中", line[-1500:], None, "output")
 
         code, lines = _run_process(
             _process_command(executable, arguments),
@@ -650,7 +642,7 @@ class URLDownloadProvider(BaseProvider):
                         progress = min(96, 3 + downloaded / total * 92)
                         detail = f"{downloaded / 1024**2:.1f}/{total / 1024**2:.1f} MB · {downloaded / elapsed / 1024**2:.1f} MB/s"
                     else:
-                        progress = min(90, 3 + elapsed / 8)
+                        progress = None
                         detail = f"{downloaded / 1024**2:.1f} MB · {downloaded / elapsed / 1024**2:.1f} MB/s"
                     emit("下載中", detail, progress, "output")
             os.replace(temporary, target)
@@ -761,14 +753,10 @@ class TrainingProvider(BaseProvider):
         ]
         if payload.get("revision"):
             arguments.extend(["--revision", str(payload["revision"])])
-        emit("啟動 QLoRA", f"{model} · {dataset.name}", 2, "info")
-        progress = 3.0
-
+        emit("啟動 QLoRA", f"{model} · {dataset.name}", None, "info")
         def parse(line: str) -> None:
-            nonlocal progress
-            progress = min(96, progress + 0.4)
             if line.strip():
-                emit("QLoRA 訓練中", line[-1500:], progress, "output")
+                emit("QLoRA 訓練中", line[-1500:], None, "output")
 
         code, lines = _run_process(
             [python, *arguments],

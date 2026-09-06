@@ -252,10 +252,10 @@ class ImageGenerationManager:
             task_id,
             status="running",
             stage="送往 ComfyUI",
-            progress=3,
+            progress=0,
             started_at=utcnow(),
         )
-        self.database.add_task_event(task_id, "正在建立 ComfyUI 工作流。", progress=3)
+        self.database.add_task_event(task_id, "正在建立 ComfyUI 工作流。", progress=None)
         try:
             workflow = self._workflow(
                 metadata["prompt"],
@@ -274,8 +274,8 @@ class ImageGenerationManager:
             prompt_id = str(queued.get("prompt_id") or "")
             if not prompt_id:
                 raise ValueError(f"ComfyUI 未回傳 prompt_id：{queued}")
-            self.database.update_task(task_id, stage="等待繪圖節點", progress=8)
-            self.database.add_task_event(task_id, f"已排入 ComfyUI：{prompt_id}", progress=8)
+            self.database.update_task(task_id, stage="等待繪圖節點", progress=0)
+            self.database.add_task_event(task_id, f"已排入 ComfyUI：{prompt_id}", progress=None)
             history: dict[str, Any] | None = None
             last_event = 0.0
             while not cancel.wait(1.5):

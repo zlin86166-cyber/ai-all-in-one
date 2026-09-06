@@ -101,8 +101,8 @@ class TaskManager:
                 conversation_id: str | None, permission_mode: str, predicted_seconds: int,
                 selected_files: list[str], web_access: bool, publish_message: bool) -> None:
         started = time.monotonic()
-        self.database.update_task(task_id, status="running", stage="準備上下文", progress=1, started_at=utcnow())
-        self.database.add_task_event(task_id, "工作已開始", progress=1)
+        self.database.update_task(task_id, status="running", stage="準備上下文", progress=0, started_at=utcnow())
+        self.database.add_task_event(task_id, "工作已開始", progress=None)
         cancel = self._cancel_events[task_id]
         guard: ScopedWorkspaceGuard | None = None
 
@@ -169,7 +169,7 @@ class TaskManager:
         task_id = task["id"]
         cancel = self._cancel_events.get(parent_task_id, threading.Event())
         started = time.monotonic()
-        self.database.update_task(task_id, status="running", stage="執行中", progress=2, started_at=utcnow())
+        self.database.update_task(task_id, status="running", stage="執行中", progress=0, started_at=utcnow())
         guard: ScopedWorkspaceGuard | None = None
 
         def emit(stage: str, message: str, progress: float | None, level: str) -> None:

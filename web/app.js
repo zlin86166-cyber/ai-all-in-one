@@ -34,6 +34,7 @@ const state = {
   pendingApproval: null,
   approvalRetry: null,
   imageStatus: null,
+  modelSyncTaskId: null,
 };
 
 async function api(path, options = {}) {
@@ -174,9 +175,13 @@ function durationLabel(seconds) {
 }
 
 function taskDisplayProgress(task) {
-  const actual = Number(task.progress || 0);
   if (task.status === "completed") return 100;
-  return Math.max(0, Math.min(100, actual));
+  const actual = Number(task.progress || 0);
+  return actual > 1 ? Math.max(0, Math.min(99, actual)) : null;
+}
+
+function progressLabel(progress) {
+  return progress == null ? "進度依事件" : `${Math.round(progress)}%`;
 }
 
 function taskRemaining(task) {
@@ -282,6 +287,14 @@ async function refreshLive() {
       renderConnections();
     }
     renderSystem();
+    if (state.currentView === "integrations") renderIntegrations();
+    if (state.modelSyncTaskId) {
+      const syncTask = state.tasks.find((item) => item.id === state.modelSyncTaskId);
+      if (syncTask && ["completed", "failed", "cancelled"].includes(syncTask.status)) {
+        state.modelSyncTaskId = null;
+        if (syncTask.status === "completed") refreshModels();
+      }
+    }
     renderLiveTasks();
     renderCurrentRun();
     if (state.currentView === "tasks") renderTasks();
@@ -312,6 +325,7 @@ function renderAll() {
   renderImages();
   renderSchedules();
   renderResearch();
+  renderIntegrations();
   renderPermissions();
   renderSelectedFileChips();
 }
@@ -394,8 +408,8 @@ function renderLiveTasks() {
   container.innerHTML = active.map((task) => {
     const progress = taskDisplayProgress(task);
     return `<button class="live-task-card" data-task-id="${escapeHtml(task.id)}" style="display:block;width:calc(100% - 41px);text-align:left;cursor:pointer">
-      <div class="live-task-head"><i class="task-spinner"></i><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.stage)} · ${Math.round(progress)}%</span></div>
-      <div class="thin-progress"><i style="width:${progress}%"></i></div>
+      <div class="live-task-head"><i class="task-spinner"></i><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.stage)} · ${progressLabel(progress)}</span></div>
+      <div class="thin-progress"><i style="width:${progress ?? 0}%"></i></div>
     </button>`;
   }).join("");
   $$('[data-task-id]', container).forEach((element) => element.addEventListener("click", () => openTaskModal(element.dataset.taskId)));
@@ -492,7 +506,7 @@ function renderCurrentRun() {
   if (task) {
     const progress = taskDisplayProgress(task);
     $("#run-title").textContent = `${task.title} · ${task.stage}`;
-    $("#run-progress").style.width = `${progress}%`;
+    $("#run-progress").style.width = `${progress ?? 0}%`;
     $("#run-eta").textContent = durationLabel(taskRemaining(task));
     $("#run-end").textContent = formatTime(task.predicted_end_at);
     $("#run-detail").onclick = () => openTaskModal(task.id);
@@ -543,7 +557,7 @@ function renderTasks() {
     return `<article class="task-row" data-task-id="${escapeHtml(task.id)}">
       <div class="task-primary"><span class="provider-logo ${providerClass(provider)}">${escapeHtml(providerInitial(provider))}</span><div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(provider.label)} · ${formatRelative(task.created_at)}</small></div></div>
       <div class="task-stage"><span>${escapeHtml(task.stage)}</span><small>${escapeHtml(task.status)}</small></div>
-      <div class="task-progress-cell"><div class="thin-progress"><i style="width:${progress}%"></i></div><strong>${Math.round(progress)}%</strong></div>
+      <div class="task-progress-cell"><div class="thin-progress"><i style="width:${progress ?? 0}%"></i></div><strong>${progressLabel(progress)}</strong></div>
       <div class="task-times"><span>${remaining == null ? formatTime(task.completed_at) : durationLabel(remaining)}</span><small>${remaining == null ? "完成時間" : `預計 ${formatTime(task.predicted_end_at)}`}</small></div>
       ${taskStatusIcon(task)}
     </article>`;
@@ -955,8 +969,9 @@ async function refreshTaskModal() {
   $("#task-modal-provider").textContent = `${provider.label} · ${task.status}`;
   $("#task-modal-title").textContent = task.title;
   $("#task-modal-stage").textContent = task.stage;
-  $("#task-modal-percent").textContent = `${Math.round(progress)}%`;
-  $("#task-modal-bar").style.width = `${progress}%`;
+  $("#task-modal-percent").textContent = progressLabel(progress);
+  $("#task-modal-bar").style.width = `${progress ?? 0}%`;
+  renderTaskOperatorDetails(task);
   $("#cancel-task").classList.toggle("hidden", !["queued", "running", "cancelling"].includes(task.status));
   try {
     const events = await api(`/api/tasks/${encodeURIComponent(task.id)}/events?after=${state.taskEventCursor}`);
@@ -1049,18 +1064,25 @@ async function refreshTerminalEvents() {
   }
 }
 
-async function pullModel(modelId) {
+async function pullModel(modelId, approvalId = null) {
   const model = state.data.models.find((item) => item.id === modelId);
-  if (!model || !confirm(`下載 ${model.label}？\n預估使用 ${model.disk_gb} GB 磁碟空間。`)) return;
+  if (!model) return;
+  if (!approvalId && !confirm(`下載 ${model.label}？\n預估使用 ${model.disk_gb} GB 磁碟空間。`)) return;
   try {
-    const task = await api("/api/models/pull", { method: "POST", body: { model_id: modelId, project_id: state.projectId, conversation_id: state.conversationId } });
+    const result = await api("/api/models/pull", { method: "POST", body: {
+      model_id: modelId, project_id: state.projectId, conversation_id: state.conversationId,
+      permission_mode: $("#permission-select").value, ...(approvalId ? { approval_id: approvalId } : {}),
+    }});
+    const task = result.task || result;
     state.tasks.unshift(task);
     toast("模型下載已開始，可在執行進度查看");
     switchView("tasks");
   } catch (error) {
-    toast(error.message, "error", 6000);
+    if (error.status === 409 && error.data?.approval) showApproval(error.data.approval, (id) => pullModel(modelId, id));
+    else toast(error.message, "error", 6000);
   }
 }
+
 
 async function refreshModels() {
   try {
@@ -1071,6 +1093,96 @@ async function refreshModels() {
   } catch (error) {
     toast(error.message, "error");
   }
+}
+
+function renderIntegrations() {
+  const integrations = state.data.integrations || {};
+  const systemPolicy = state.data.system?.resource_policy || state.data.resource_policy || {};
+  const cards = [
+    ["Google Play", integrations.google_play?.token_present ? "OAuth token ready" : "需要 GOOGLE_PLAY_ACCESS_TOKEN", integrations.google_play?.token_present],
+    ["Google Sites", "Modern Sites · browser-assisted", true],
+    ["官方模型同步", integrations.model_sync?.metadata_present ? "Metadata 已同步" : "尚未同步", integrations.model_sync?.metadata_present],
+    ["本機控制面", "Loopback + Session + Same-Origin", true],
+  ];
+  const grid = $("#integration-status-grid");
+  if (grid) grid.innerHTML = cards.map(([name, detail, ready]) => `<article class="integration-status-card"><span class="integration-light ${ready ? "ready" : "setup"}"></span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(detail)}</small></div></article>`).join("");
+  const policy = $("#resource-policy");
+  if (policy) {
+    const reasons = systemPolicy.reasons || ["資源狀態等待更新"];
+    policy.innerHTML = `<div><span>允許並行</span><strong>${systemPolicy.max_parallel_agents ?? "—"}</strong></div><div><span>大型本機模型</span><strong>${systemPolicy.admit_large_local_model === false ? "暫停" : "可評估"}</strong></div><div><span>遠端優先</span><strong>${systemPolicy.prefer_remote_model ? "YES" : "NO"}</strong></div><p>${reasons.map(escapeHtml).join(" · ")}</p>`;
+  }
+}
+
+function renderTaskOperatorDetails(task) {
+  const target = $("#task-operator-details");
+  if (!target) return;
+  const meta = task.metadata || {};
+  const checkpoint = meta.checkpoint || {};
+  const plan = meta.plan || checkpoint.plan;
+  const reviews = meta.reviews || checkpoint.reviews || [];
+  const selected = meta.selected_files || meta.resume_payload?.selected_files || [];
+  const rows = [];
+  if (meta.retry_of || meta.recovered_after_crash) rows.push(`<span>Recovery<strong>${escapeHtml(meta.retry_of ? `retry ${meta.retry_of.slice(-8)}` : "crash resume")}</strong></span>`);
+  if (selected.length) rows.push(`<span>Write scope<strong>${selected.length} selected item(s)</strong></span>`);
+  if (plan?.steps?.length) rows.push(`<span>DAG<strong>${plan.steps.length} step(s)</strong></span>`);
+  if (reviews.length) rows.push(`<span>Quality gate<strong>${escapeHtml(reviews.at(-1)?.verdict || "pending")}</strong></span>`);
+  if (meta.acceptance_passed != null) rows.push(`<span>Acceptance<strong>${meta.acceptance_passed ? "PASS" : "FAIL"}</strong></span>`);
+  target.innerHTML = rows.length ? `<div class="operator-detail-grid">${rows.join("")}</div>${plan?.summary ? `<p>${escapeHtml(plan.summary)}</p>` : ""}` : "";
+  target.classList.toggle("hidden", !rows.length);
+}
+
+async function syncOfficialModels() {
+  try {
+    const result = await api("/api/models/sync", { method: "POST", body: { project_id: state.projectId, conversation_id: state.conversationId } });
+    const task = result.task || result;
+    state.modelSyncTaskId = task.id;
+    state.tasks.unshift(task);
+    toast("官方模型 metadata 同步已開始");
+    switchView("tasks");
+  } catch (error) { toast(error.message, "error", 6000); }
+}
+
+async function publishPlay(approvalId = null) {
+  const artifact = $("#play-artifact").value.trim();
+  const packageName = $("#play-package").value.trim();
+  if (!artifact || !packageName) { toast("請填寫 Package name 與 APK/AAB 本機路徑", "error"); return; }
+  try {
+    const result = await api("/api/integrations/play", { method: "POST", body: {
+      project_id: state.projectId, conversation_id: state.conversationId,
+      permission_mode: $("#permission-select").value, package: packageName, artifact,
+      track: $("#play-track").value, status: $("#play-status").value,
+      commit: $("#play-commit").checked, ...(approvalId ? { approval_id: approvalId } : {}),
+    }});
+    const task = result.task || result; state.tasks.unshift(task);
+    toast($("#play-commit").checked ? "Google Play COMMIT 工作已開始" : "Google Play 驗證工作已開始"); switchView("tasks");
+  } catch (error) {
+    if (error.status === 409 && error.data?.approval) showApproval(error.data.approval, (id) => publishPlay(id));
+    else toast(error.message, "error", 7000);
+  }
+}
+
+async function openSitesSession(approvalId = null) {
+  const title = $("#sites-title").value.trim();
+  if (!title) { toast("請輸入 Google Sites 標題", "error"); return; }
+  try {
+    const result = await api("/api/integrations/sites", { method: "POST", body: {
+      project_id: state.projectId, conversation_id: state.conversationId, title,
+      profile: $("#sites-profile").value.trim() || null,
+      template_url: $("#sites-template").value.trim() || null,
+      ...(approvalId ? { approval_id: approvalId } : {}),
+    }});
+    const task = result.task || result; state.tasks.unshift(task); toast("Google Sites 工作階段已開始"); switchView("tasks");
+  } catch (error) {
+    if (error.status === 409 && error.data?.approval) showApproval(error.data.approval, (id) => openSitesSession(id));
+    else toast(error.message, "error", 7000);
+  }
+}
+
+async function runMaintenanceNow() {
+  try {
+    const result = await api("/api/maintenance/run", { method: "POST", body: { permission_mode: $("#permission-select").value } });
+    toast(`維護完成 · backup ${result.backup || "ok"}`, "normal", 6000);
+  } catch (error) { toast(error.message, "error", 6000); }
 }
 
 async function refreshSchedules() {
@@ -1327,6 +1439,16 @@ function bindEvents() {
     const root = state.data.app_root || ".";
     openTerminal(`& '${root.replaceAll("'", "''")}\\setup.ps1' -InstallCli`);
     toast("已填入安裝命令；確認後按執行");
+  });
+  $("#refresh-integrations").addEventListener("click", refreshEverything);
+  $("#sync-official-models").addEventListener("click", syncOfficialModels);
+  $("#run-maintenance").addEventListener("click", runMaintenanceNow);
+  $("#publish-play").addEventListener("click", () => publishPlay());
+  $("#open-sites-session").addEventListener("click", () => openSitesSession());
+  $("#play-use-selected").addEventListener("click", () => {
+    const candidate = [...state.selectedFiles].find((path) => /\.(apk|aab)$/i.test(path));
+    if (!candidate) toast("目前選取範圍沒有 APK/AAB", "error");
+    else $("#play-artifact").value = candidate;
   });
   $("#refresh-images").addEventListener("click", refreshImages);
   $("#generate-image").addEventListener("click", generateImage);
