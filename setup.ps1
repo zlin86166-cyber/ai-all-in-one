@@ -1,7 +1,9 @@
 param(
     [switch]$InstallCli,
+    [switch]$InstallOpenAICli,
     [switch]$InstallRecommendedModel,
     [switch]$CreateDesktopShortcut,
+    [switch]$MaxControlShortcut,
     [switch]$InstallStartup,
     [switch]$InstallWatchdog
 )
@@ -12,7 +14,8 @@ $appRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $runtimeRoot = Join-Path $appRoot '.runtime'
 $nodeRoot = Join-Path $runtimeRoot 'node'
 $cliRoot = Join-Path $runtimeRoot 'cli'
-New-Item -ItemType Directory -Path $runtimeRoot, $nodeRoot, $cliRoot -Force | Out-Null
+$openAIRoot = Join-Path $runtimeRoot 'openai-cli'
+New-Item -ItemType Directory -Path $runtimeRoot, $nodeRoot, $cliRoot, $openAIRoot -Force | Out-Null
 
 function Resolve-AIHubNode {
     $systemNode = Get-Command node -ErrorAction SilentlyContinue
@@ -38,10 +41,43 @@ function Install-AIHubPortableNode {
     return $installed.FullName
 }
 
-if (-not ($InstallCli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
+function Install-AIHubOpenAICli {
+    Write-Host 'Downloading the latest official OpenAI CLI Windows release...'
+    $headers = @{ 'User-Agent' = 'AI-Hub-Setup' }
+    $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/openai/openai-cli/releases/latest'
+    $asset = $release.assets | Where-Object { $_.name -like 'openai_*_windows_amd64.zip' } | Select-Object -First 1
+    if (-not $asset) { throw 'The official OpenAI CLI Windows amd64 archive was not found.' }
+    if (-not $asset.digest -or -not $asset.digest.StartsWith('sha256:')) {
+        throw 'The official OpenAI CLI release does not expose a SHA256 digest.'
+    }
+    $temporaryArchive = Join-Path ([IO.Path]::GetTempPath()) "ai-hub-$($asset.name)"
+    try {
+        Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile $temporaryArchive
+        $actualDigest = (Get-FileHash -LiteralPath $temporaryArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        $expectedDigest = $asset.digest.Substring(7).ToLowerInvariant()
+        if ($actualDigest -ne $expectedDigest) { throw 'OpenAI CLI archive SHA256 verification failed.' }
+        Expand-Archive -LiteralPath $temporaryArchive -DestinationPath $openAIRoot -Force
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporaryArchive) { Remove-Item -LiteralPath $temporaryArchive -Force }
+    }
+    $openAIExecutable = Get-ChildItem -LiteralPath $openAIRoot -Filter openai.exe -Recurse | Select-Object -First 1
+    if (-not $openAIExecutable) { throw 'openai.exe was not found after extracting the official release.' }
+    $openAIVersion = & $openAIExecutable.FullName --version
+    if ($LASTEXITCODE -ne 0) { throw "OpenAI CLI version probe failed with exit code $LASTEXITCODE" }
+    Write-Host $openAIVersion
+    return $openAIExecutable.FullName
+}
+
+if ($MaxControlShortcut) { $CreateDesktopShortcut = $true }
+
+if (-not ($InstallCli -or $InstallOpenAICli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
     $InstallCli = $true
+    $InstallOpenAICli = $true
     $CreateDesktopShortcut = $true
 }
+
+if ($InstallCli) { $InstallOpenAICli = $true }
 
 if ($InstallCli) {
     $nodeExecutable = Resolve-AIHubNode
@@ -61,13 +97,17 @@ if ($InstallCli) {
     if (-not (Test-Path -LiteralPath $geminiLauncher)) { throw 'Gemini CLI launcher is missing after installation.' }
     Write-Host "Codex CLI: $codexLauncher"
     Write-Host "Gemini CLI: $geminiLauncher"
-
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) {
         Write-Host 'Installing/updating Hugging Face CLI for optional model-weight downloads...'
         & $python.Source -m pip install --disable-pip-version-check --upgrade 'huggingface_hub[cli]'
         if ($LASTEXITCODE -ne 0) { Write-Warning 'huggingface_hub installation failed; metadata sync still works, direct HF download may require a separate Python environment.' }
     }
+}
+
+if ($InstallOpenAICli) {
+    $openAILauncher = Install-AIHubOpenAICli
+    Write-Host "OpenAI CLI: $openAILauncher"
 }
 
 if ($InstallRecommendedModel) {
@@ -84,7 +124,12 @@ if ($CreateDesktopShortcut) {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $desktopExecutable = Join-Path $appRoot 'AIHub.exe'
-    if (Test-Path -LiteralPath $desktopExecutable) {
+    if ($MaxControlShortcut) {
+        $shortcut.TargetPath = 'powershell.exe'
+        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $appRoot 'start.ps1')`" -Elevate -MaxControl"
+        $shortcut.IconLocation = if (Test-Path -LiteralPath $desktopExecutable) { "$desktopExecutable,0" } else { 'shell32.dll,14' }
+    }
+    elseif (Test-Path -LiteralPath $desktopExecutable) {
         $shortcut.TargetPath = $desktopExecutable
         $shortcut.Arguments = ''
         $shortcut.IconLocation = "$desktopExecutable,0"

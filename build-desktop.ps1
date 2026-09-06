@@ -14,8 +14,7 @@ foreach ($cand in $pythonCandidates) {
 }
 if (-not $pythonExecutable) { throw 'Python with PyInstaller was not found.' }
 
-$entry = Join-Path $appRoot 'desktop_geek.py'
-if (-not (Test-Path -LiteralPath $entry)) { $entry = Join-Path $appRoot 'desktop.py' }
+$entry = Join-Path $appRoot 'desktop.py'
 $buildRoot = Join-Path $appRoot '.build\pyinstaller'
 $specRoot = Join-Path $appRoot '.build\spec'
 New-Item -ItemType Directory -Path $buildRoot, $specRoot -Force | Out-Null

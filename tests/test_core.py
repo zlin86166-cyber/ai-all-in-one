@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ai_hub.application import AIHubApplication
@@ -13,8 +14,9 @@ from ai_hub.db import Database
 from ai_hub.evaluator import FeasibilityEvaluator
 from ai_hub.images import ImageGenerationManager
 from ai_hub.models import ModelManager
-from ai_hub.providers import FileTransferProvider, ProviderContext
+from ai_hub.providers import ChatGPTCLIProvider, FileTransferProvider, ProviderContext, _prompt_with_history
 from ai_hub.security import FULL_ACCESS_PHRASE, action_fingerprint, classify_command, path_inside, requires_account_approval, scoped_path, SecurityError
+from tools import google_sites_assist, model_sync
 
 
 class DatabaseTests(unittest.TestCase):
@@ -168,6 +170,49 @@ class ImageWorkflowTests(unittest.TestCase):
 
 
 class ProviderAndModelTests(unittest.TestCase):
+    def test_frozen_helpers_write_beside_their_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = str(Path(directory) / "AIHubModelSync.exe")
+            with mock.patch.object(model_sync.sys, "frozen", True, create=True), mock.patch.object(
+                model_sync.sys, "executable", executable
+            ):
+                self.assertEqual(model_sync.application_root(), Path(directory).resolve())
+            with mock.patch.object(google_sites_assist.sys, "frozen", True, create=True), mock.patch.object(
+                google_sites_assist.sys, "executable", str(Path(directory) / "AIHubSitesAssist.exe")
+            ):
+                self.assertEqual(google_sites_assist.application_root(), Path(directory).resolve())
+
+    def test_selected_text_file_is_added_to_cli_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected = root / "selected.py"
+            outside = root.parent / f"{root.name}-outside.txt"
+            selected.write_text("print('selected context')", encoding="utf-8")
+            outside.write_text("must not leak", encoding="utf-8")
+            try:
+                prompt = _prompt_with_history(
+                    ProviderContext(
+                        prompt="review it",
+                        project_path=root,
+                        permission_mode="observe",
+                        selected_files=[str(selected), str(outside)],
+                    )
+                )
+            finally:
+                outside.unlink(missing_ok=True)
+            self.assertIn("selected.py", prompt)
+            self.assertIn("selected context", prompt)
+            self.assertNotIn("must not leak", prompt)
+
+    def test_chatgpt_cli_response_text_extraction(self) -> None:
+        payload = {
+            "output": [
+                {"type": "reasoning", "content": []},
+                {"type": "message", "content": [{"type": "output_text", "text": "CLI works"}]},
+            ]
+        }
+        self.assertEqual(ChatGPTCLIProvider._response_text(payload), "CLI works")
+
     def test_file_transfer_copies_bytes_and_reports_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

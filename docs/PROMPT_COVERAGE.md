@@ -6,13 +6,14 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 
 | Requirement | Status | Implementation |
 |---|---|---|
-| Native white clean geek interface | DONE | Native desktop uses `desktop_geek.py` palette wrapper and is the only supported product surface. |
+| Native white clean geek interface | DONE | Native desktop uses the white `desktop.py` operator console; `desktop_geek.py` is an optional dark skin and is not the packaged default. |
 | Downloadable local Windows package | DONE | Windows Build creates `AIHub.exe`, three bundled integration helpers, setup/watchdog files, training files and `AIHub-Windows.zip`; `v*` tags attach the ZIP to GitHub Release. |
 | Local launch without Web server | DONE | `start.ps1` launches native desktop only; `-Web` is explicitly rejected. Release users can launch `AIHub.exe` directly. |
 | Normal launch without forced admin | DONE | Native build no longer embeds `--uac-admin`; `start.ps1 -Elevate` is explicit. `-MaxControl` is also explicit. |
 | Frozen integration execution | DONE | `IntegrationManager` uses `AIHubModelSync.exe`, `AIHubPlayPublish.exe` and `AIHubSitesAssist.exe` instead of treating frozen `AIHub.exe` as a Python interpreter. |
 | Gemini CLI conversation | DONE | `GeminiProvider`. |
 | Codex CLI conversation | DONE | `CodexProvider`. |
+| ChatGPT CLI conversation | DONE | `ChatGPTCLIProvider` invokes the official `openai responses create` CLI; authentication uses the configured API-key environment variable. |
 | Execution progress / ETA / predicted end | DONE | Task/event/progress/predicted time fields and UI. |
 | Other open-source AI | DONE | Ollama discovery plus OpenAI-compatible endpoints. |
 | Multiple projects / selected files | DONE | Project scope, file explorer, preview, selected files, write controls. |
@@ -41,7 +42,7 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 
 - AI Hub is a Windows native desktop product, not a Web UI product.
 - The release must be usable by launching `AIHub.exe` locally.
-- Codex/Gemini CLI initialization is handled by `setup.ps1`; portable Node.js may be installed into `.runtime`.
+- Codex/Gemini/OpenAI CLI initialization is handled by `setup.ps1`; portable Node.js and the SHA256-verified official OpenAI Windows binary are installed into `.runtime`.
 - QLoRA is intentionally different: a real NVIDIA CUDA/Python ML environment is required and may be specified with `AI_HUB_TRAINING_PYTHON`.
 - Runtime data remains local beside the installed/extracted app unless the user explicitly transfers it elsewhere.
 

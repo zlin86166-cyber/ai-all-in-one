@@ -4,9 +4,16 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def application_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
 
 
 def open_modern_sites(title: str, template_url: str | None, profile: str | None) -> dict[str, str]:
@@ -48,7 +55,7 @@ def main() -> int:
     if not args.approve_account_action:
         raise SystemExit("拒絕執行：Google 帳號操作必須明確加上 --approve-account-action。")
     result = open_modern_sites(args.title, args.template_url, args.profile)
-    root = Path(__file__).resolve().parents[1]
+    root = application_root()
     manifest = Path(args.manifest)
     if not manifest.is_absolute():
         manifest = root / manifest

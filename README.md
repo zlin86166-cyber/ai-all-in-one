@@ -2,7 +2,7 @@
 
 AI Hub 是一套 **Windows 本機多模型 AI Operator Console**。正式產品只以原生 Windows 桌面版發佈：下載 `AIHub-Windows.zip`、解壓後直接執行 `AIHub.exe`，專案、對話、任務、模型 metadata、研究索引與設定都保存在本機。
 
-核心支援 **Codex CLI、Gemini CLI、Ollama 本機模型、≤50B 的 Kimi/DeepSeek 官方開源模型、OpenAI-compatible 推論節點、ComfyUI**，並整合多專案、檔案操作、PowerShell、任務進度、ETA、歷史對話、AI 協作、研究爬蟲、排程與權限控制。
+核心支援 **Codex CLI、Gemini CLI、官方 OpenAI CLI（ChatGPT API）、Ollama 本機模型、≤50B 的 Kimi/DeepSeek 官方開源模型、OpenAI-compatible 推論節點、ComfyUI**，並整合多專案、檔案操作、PowerShell、任務進度、ETA、歷史對話、AI 協作、研究爬蟲、排程與權限控制。
 
 ## 正式發佈形式
 
@@ -60,8 +60,8 @@ GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；�
 
 ## 主要能力
 
-- **Native Windows UI**：`desktop_geek.py` 白色潔淨 + Operator Console 風格。
-- **CLI AI**：Codex CLI、Gemini CLI。
+- **Native Windows UI**：`desktop.py` 白色潔淨 + Operator Console 風格；`desktop_geek.py` 保留為可選深色外觀，不是預設入口。
+- **CLI AI**：Codex CLI、Gemini CLI、官方 OpenAI CLI（ChatGPT API）。
 - **本機/開源 AI**：Ollama 自動發現；vLLM、SGLang、llama.cpp、LM Studio 等可透過 OpenAI-compatible endpoint 接入。
 - **多專案與檔案**：瀏覽、預覽、選取、修改、儲存、匯入/匯出與受控下載。
 - **多 AI 協作**：Planner DAG → 依賴/分工 → 安全並行 → Peer Review → 最終彙整。
@@ -81,9 +81,10 @@ GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；�
 ```powershell
 .\.runtime\cli\node_modules\.bin\codex.cmd login
 .\.runtime\cli\node_modules\.bin\gemini.cmd
+.\.runtime\openai-cli\openai.exe --version
 ```
 
-AI Hub 不把帳號密碼寫入 SQLite 或 settings；CLI 認證由官方 CLI 自己保存。
+Codex/Gemini 的互動認證由官方 CLI 自己保存；OpenAI CLI 讀取 `OPENAI_API_KEY`（或整合頁指定的環境變數）。AI Hub 不把密碼或 API 金鑰寫入 SQLite/settings。
 
 ## 重新建置 Windows 發行版
 

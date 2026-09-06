@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -15,6 +16,12 @@ from typing import Any
 ORG_FAMILIES = {"Kimi": "moonshotai", "DeepSeek": "deepseek-ai"}
 TEXT_TAGS = {"text-generation", "conversational", "text2text-generation"}
 SIZE_PATTERN = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s*[Bb](?![A-Za-z])")
+
+
+def application_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
 
 
 def request_json(url: str) -> Any:
@@ -106,9 +113,12 @@ def download_model(model_id: str, target_root: Path) -> Path:
 
 
 def train_model(model_id: str, dataset: Path, output: Path, epochs: float, rank: int) -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = application_root()
     script = root / "training" / "train_lora.py"
-    command = [sys.executable, str(script), "--model", model_id, "--dataset", str(dataset), "--output", str(output), "--epochs", str(epochs), "--lora-rank", str(rank), "--max-seq-length", "2048"]
+    python = os.environ.get("AI_HUB_TRAINING_PYTHON") or shutil.which("python") or shutil.which("py")
+    if not script.is_file() or not python:
+        raise RuntimeError("找不到發行包內的 QLoRA 腳本或外部 Python；可用 AI_HUB_TRAINING_PYTHON 指定 CUDA 訓練環境。")
+    command = [python, str(script), "--model", model_id, "--dataset", str(dataset), "--output", str(output), "--epochs", str(epochs), "--lora-rank", str(rank), "--max-seq-length", "2048"]
     print("RUN:", subprocess.list2cmdline(command), flush=True)
     completed = subprocess.run(command, check=False)
     if completed.returncode:
@@ -129,7 +139,7 @@ def main() -> int:
     parser.add_argument("--approve-training", action="store_true")
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parents[1]
+    root = application_root()
     output = (root / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output)
     payload = select_models(max(1.0, min(args.limit_b, 50.0)))
     output.parent.mkdir(parents=True, exist_ok=True)
