@@ -5,6 +5,7 @@ on:
     paths:
       - tools/apply_production_hardening.py
       - tools/fix_production_hardening_migration.py
+      - tools/fix_provider_runtime_paths.py
       - .github/workflows/apply-production-hardening.yml
 permissions:
   contents: write
@@ -23,6 +24,7 @@ jobs:
         run: |
           python tools/apply_production_hardening.py
           python tools/fix_production_hardening_migration.py
+          python tools/fix_provider_runtime_paths.py
       - name: Run tests
         run: python -m unittest discover -v
       - name: Commit hardened runtime
@@ -30,13 +32,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # The default Actions token cannot create workflow files. Those are added
-          # separately through the authorized GitHub connector after this commit.
           rm -f .github/workflows/ci.yml .github/workflows/windows-build.yml
           git add -A
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
-          git commit -m "feat: harden AI Hub runtime and integrate recovery/security"
+          git commit -m "feat: finalize AI Hub production hardening"
           git push origin HEAD:main
