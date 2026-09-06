@@ -30,6 +30,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The default Actions token cannot create workflow files. Those are added
+          # separately through the authorized GitHub connector after this commit.
+          rm -f .github/workflows/ci.yml .github/workflows/windows-build.yml
           git add -A
           if git diff --cached --quiet; then
             echo "No changes"
