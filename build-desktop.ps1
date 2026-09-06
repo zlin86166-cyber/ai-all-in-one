@@ -20,31 +20,43 @@ $buildRoot = Join-Path $appRoot '.build\pyinstaller'
 $specRoot = Join-Path $appRoot '.build\spec'
 New-Item -ItemType Directory -Path $buildRoot, $specRoot -Force | Out-Null
 
-$arguments = @(
-    '-m', 'PyInstaller',
-    $entry,
-    '--name', 'AIHub',
-    '--onefile',
-    '--windowed',
-    '--uac-admin',
-    '--noupx',
-    '--noconfirm',
-    '--distpath', $appRoot,
-    '--workpath', $buildRoot,
-    '--specpath', $specRoot
-)
-if (-not $NoClean) { $arguments += '--clean' }
+function Invoke-PyInstallerBuild {
+    param(
+        [Parameter(Mandatory=$true)][string]$Entry,
+        [Parameter(Mandatory=$true)][string]$Name,
+        [switch]$Windowed
+    )
+    $arguments = @(
+        '-m', 'PyInstaller',
+        $Entry,
+        '--name', $Name,
+        '--onefile',
+        '--noupx',
+        '--noconfirm',
+        '--distpath', $appRoot,
+        '--workpath', (Join-Path $buildRoot $Name),
+        '--specpath', $specRoot
+    )
+    if ($Windowed) { $arguments += '--windowed' } else { $arguments += '--console' }
+    if (-not $NoClean) { $arguments += '--clean' }
+    & $pythonExecutable @arguments
+    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed for $Name with exit code $LASTEXITCODE" }
+}
 
 Push-Location -LiteralPath $appRoot
 try {
-    & $pythonExecutable @arguments
-    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
+    Invoke-PyInstallerBuild -Entry $entry -Name 'AIHub' -Windowed
+    Invoke-PyInstallerBuild -Entry (Join-Path $appRoot 'tools\model_sync.py') -Name 'AIHubModelSync'
+    Invoke-PyInstallerBuild -Entry (Join-Path $appRoot 'tools\play_publish.py') -Name 'AIHubPlayPublish'
+    Invoke-PyInstallerBuild -Entry (Join-Path $appRoot 'tools\google_sites_assist.py') -Name 'AIHubSitesAssist'
 }
 finally { Pop-Location }
 
-$output = Join-Path $appRoot 'AIHub.exe'
-if (-not (Test-Path -LiteralPath $output)) { throw 'AIHub.exe was not created.' }
-$hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
-Write-Host "Desktop executable: $output"
-Write-Host "Theme entry: $entry"
-Write-Host "SHA256: $($hash.Hash)"
+$outputs = @('AIHub.exe','AIHubModelSync.exe','AIHubPlayPublish.exe','AIHubSitesAssist.exe')
+foreach ($name in $outputs) {
+    $output = Join-Path $appRoot $name
+    if (-not (Test-Path -LiteralPath $output)) { throw "$name was not created." }
+    $hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
+    Write-Host "$name SHA256: $($hash.Hash)"
+}
+Write-Host "Native desktop entry: $entry"
