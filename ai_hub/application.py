@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import secrets
 import os
 import subprocess
 import threading
@@ -52,6 +53,8 @@ class AIHubApplication:
         self.settings = Settings(self.paths.settings)
         self.session_token = secrets.token_urlsafe(32)
         os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
+        self.session_token = secrets.token_urlsafe(32)
+        os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
         # Full access is process-local: another diagnostic process cannot revoke or inherit it.
         self._full_access_unlocked_until: datetime | None = None
         self.database = Database(self.paths.database)
@@ -68,6 +71,9 @@ class AIHubApplication:
         self.images = ImageGenerationManager(
             self.paths, self.settings, self.database, self.tasks
         )
+        self.integrations = IntegrationManager(self.paths, self.database, self.tasks)
+        self.maintenance = DataMaintenance(self.database, self.paths.data)
+        self._recovery_done = False
         self.integrations = IntegrationManager(self.paths, self.database, self.tasks)
         self.maintenance = DataMaintenance(self.database, self.paths.data)
         self._recovery_done = False
@@ -98,6 +104,8 @@ class AIHubApplication:
                     bool(self.settings.get("adaptive_performance", False)),
                     int(self.settings.get("performance_memory_threshold", 90)),
                 )
+                if self.settings.get('maintenance_enabled', True):
+                    self.maintenance.maybe_run()
                 if self.settings.get('maintenance_enabled', True):
                     self.maintenance.maybe_run()
             except Exception as error:
@@ -186,6 +194,7 @@ class AIHubApplication:
             "crawler_allowlist", "adaptive_performance", "performance_memory_threshold",
             "max_parallel_agents", "auto_peer_review", "provider_config",
             "allow_private_research", "maintenance_enabled",
+            "allow_private_research", "maintenance_enabled",
         }
         clean = {key: value for key, value in values.items() if key in allowed}
         if "max_parallel_agents" in clean:
@@ -195,6 +204,7 @@ class AIHubApplication:
                 70, min(int(clean["performance_memory_threshold"]), 98)
             )
         updated = self.settings.update(clean)
+        os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
         os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
         self.providers.invalidate()
         self.database.audit("settings.updated", "settings", {"keys": list(clean)})

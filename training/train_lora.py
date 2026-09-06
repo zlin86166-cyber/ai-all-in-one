@@ -15,6 +15,10 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--epochs", default=1.0, type=float)
     parser.add_argument("--learning-rate", default=2e-4, type=float)
     parser.add_argument("--lora-rank", default=16, type=int)
+    parser.add_argument("--revision")
+    parser.add_argument("--seed", default=42, type=int)
+    parser.add_argument("--resume-from-checkpoint", type=Path)
+    parser.add_argument("--trust-remote-code", action="store_true")
     return parser.parse_args()
 
 
@@ -57,6 +61,8 @@ def main() -> int:
     torch = dependencies["torch"]
     if not torch.cuda.is_available():
         raise SystemExit("真正 QLoRA 訓練需要 NVIDIA CUDA；目前沒有可用 CUDA GPU，因此拒絕假裝完成訓練。")
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
     available_vram = sum(
         torch.cuda.get_device_properties(index).total_memory
         for index in range(torch.cuda.device_count())
@@ -82,13 +88,16 @@ def main() -> int:
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
     )
-    tokenizer = dependencies["AutoTokenizer"].from_pretrained(args.model, trust_remote_code=True)
+    tokenizer = dependencies["AutoTokenizer"].from_pretrained(
+        args.model, revision=args.revision, trust_remote_code=args.trust_remote_code
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = dependencies["AutoModelForCausalLM"].from_pretrained(
         args.model,
+        revision=args.revision,
         device_map="auto",
-        trust_remote_code=True,
+        trust_remote_code=args.trust_remote_code,
         quantization_config=quantization,
     )
     model = dependencies["prepare_model_for_kbit_training"](model)
@@ -123,6 +132,8 @@ def main() -> int:
         logging_steps=5,
         save_strategy="epoch",
         report_to="none",
+        seed=args.seed,
+        data_seed=args.seed,
     )
     trainer = dependencies["Trainer"](
         model=model,
@@ -130,7 +141,9 @@ def main() -> int:
         train_dataset=tokenized,
         data_collator=dependencies["DataCollatorForLanguageModeling"](tokenizer, mlm=False),
     )
-    trainer.train()
+    resume = str(args.resume_from_checkpoint.resolve()) if args.resume_from_checkpoint else None
+    trainer.train(resume_from_checkpoint=resume)
+    trainer.save_state()
     trainer.save_model(str(args.output))
     tokenizer.save_pretrained(str(args.output))
     metadata = {
@@ -139,6 +152,10 @@ def main() -> int:
         "examples": len(dataset),
         "epochs": args.epochs,
         "lora_rank": args.lora_rank,
+        "revision": args.revision,
+        "seed": args.seed,
+        "trust_remote_code": args.trust_remote_code,
+        "resumed_from": str(args.resume_from_checkpoint.resolve()) if args.resume_from_checkpoint else None,
         "vram_gb": round(available_vram, 1),
     }
     (args.output / "ai-hub-training.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")

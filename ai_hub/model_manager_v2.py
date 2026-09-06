@@ -30,7 +30,7 @@ class ModelManager(BaseModelManager):
                     "ram_gb": ram, "disk_gb": disk, "recommended": key == "latest_eligible",
                     "notes": "由官方 Hugging Face organization metadata 動態同步",
                     "source": row.get("source"), "hf_repo": row["id"], "training_model": row["id"],
-                    "dynamic": True, "last_modified": row.get("last_modified")})
+                    "dynamic": True, "last_modified": row.get("last_modified"), "revision": row.get("revision")})
         return result
 
     def catalog(self) -> list[dict[str, Any]]:
@@ -77,7 +77,8 @@ class ModelManager(BaseModelManager):
         if ram < requirements["ram_gb"]: blockers.append(f"RAM 需要至少 {requirements['ram_gb']:.0f} GB，目前 {ram:.1f} GB")
         if disk < requirements["disk_gb"]: blockers.append(f"可用磁碟需要至少 {requirements['disk_gb']:.0f} GB，目前 {disk:.1f} GB")
         return {"ready": not blockers, "model_id": model_id, "training_model": model_id, "parameters_b": parameters,
-                "dataset": dataset, "cuda": cuda, "requirements": requirements, "detected": {"ram_gb": ram, "disk_gb": disk}, "blockers": blockers}
+                "revision": dynamic.get("revision"), "dataset": dataset, "cuda": cuda, "requirements": requirements,
+                "detected": {"ram_gb": ram, "disk_gb": disk}, "blockers": blockers}
 
     def readiness(self) -> dict[str, Any]:
         value = super().readiness(); sync = self.paths.data / "latest-models.json"

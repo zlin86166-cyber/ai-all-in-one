@@ -765,6 +765,8 @@ class TrainingProvider(BaseProvider):
             "--epochs", str(payload.get("epochs", 1.0)), "--lora-rank", str(payload.get("lora_rank", 16)),
             "--max-seq-length", str(payload.get("max_seq_length", 2048)),
         ]
+        if payload.get("revision"):
+            arguments.extend(["--revision", str(payload["revision"])])
         emit("啟動 QLoRA", f"{model} · {dataset.name}", 2, "info")
         progress = 3.0
 

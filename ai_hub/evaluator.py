@@ -63,8 +63,9 @@ class FeasibilityEvaluator:
         return 1.0 / (1.0 + math.exp(-value))
 
     def _calibration(self) -> dict[str, Any] | None:
-        examples = self.database.feasibility_examples()
-        signature = len(examples) + sum(3 if item["verified"] else 1 for item in examples)
+        all_examples = self.database.feasibility_examples()
+        examples = [item for item in all_examples if item.get("verified")]
+        signature = len(all_examples) + len(examples) * 7
         if signature == self._calibration_cache[0]:
             return self._calibration_cache[1]
         if len(examples) < 20:
@@ -83,7 +84,7 @@ class FeasibilityEvaluator:
             for item in training:
                 features = [(float(item["factors"].get(key, 50)) - 50.0) / 50.0 for key in keys]
                 label = 1.0 if item["success"] else 0.0
-                sample_weight = 2.5 if item["verified"] else 0.65
+                sample_weight = 1.0
                 prediction = self._sigmoid(bias + sum(weight * value for weight, value in zip(weights, features)))
                 error = (prediction - label) * sample_weight
                 bias_gradient += error

@@ -262,6 +262,7 @@ class ModelManager:
             "epochs": max(0.1, min(float(epochs), 20.0)),
             "lora_rank": max(4, min(int(lora_rank), 256)),
             "max_seq_length": 2048,
+            "revision": preflight.get("revision"),
         }
         predicted = max(1800, int(preflight["parameters_b"] * 900 * payload["epochs"]))
         return self.tasks.launch(

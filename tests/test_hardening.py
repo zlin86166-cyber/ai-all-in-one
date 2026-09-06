@@ -39,6 +39,14 @@ class HardeningTests(unittest.TestCase):
             approval=db.create_approval("system","test",fp,payload); db.resolve_approval(approval["id"],True)
             self.assertTrue(db.approval_valid(approval["id"],fp)); self.assertFalse(db.approval_valid(approval["id"],fp))
 
+    def test_calibration_requires_verified_examples(self):
+        from ai_hub.evaluator import FeasibilityEvaluator
+        class FakeDB:
+            @staticmethod
+            def feasibility_examples():
+                return [{"verified": False, "success": True, "factors": {}} for _ in range(100)]
+        self.assertIsNone(FeasibilityEvaluator(FakeDB())._calibration())
+
     def test_scheduler_cross_midnight(self):
         self.assertTrue(Scheduler._within_window("23:30","22:00","02:00")); self.assertTrue(Scheduler._within_window("01:00","22:00","02:00")); self.assertFalse(Scheduler._within_window("12:00","22:00","02:00"))
 

@@ -3,7 +3,6 @@ param([switch]$NoClean)
 $ErrorActionPreference = 'Stop'
 $appRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pythonCandidates = @(
-    'C:\Users\ASUS\AppData\Local\Programs\Python\Python313\python.exe',
     (Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
     (Get-Command py -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }

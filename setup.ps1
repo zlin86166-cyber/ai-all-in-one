@@ -51,8 +51,10 @@ if ($InstallCli) {
     $npmCommand = Join-Path $nodeDirectory 'npm.cmd'
     if (-not (Test-Path -LiteralPath $npmCommand)) { throw 'npm.cmd was not found.' }
     $env:PATH = "$nodeDirectory$([IO.Path]::PathSeparator)$env:PATH"
-    Write-Host 'Installing Codex CLI and Gemini CLI into the private project runtime...'
-    & $npmCommand --prefix $cliRoot install --no-audit --no-fund '@openai/codex@latest' '@google/gemini-cli@latest'
+    $codexVersion = if ($env:AI_HUB_CODEX_VERSION) { $env:AI_HUB_CODEX_VERSION } else { '0.153.4' }
+    $geminiVersion = if ($env:AI_HUB_GEMINI_VERSION) { $env:AI_HUB_GEMINI_VERSION } else { '0.58.0' }
+    Write-Host "Installing tested CLI versions: Codex $codexVersion / Gemini $geminiVersion"
+    & $npmCommand --prefix $cliRoot install --save-exact --no-audit --no-fund "@openai/codex@$codexVersion" "@google/gemini-cli@$geminiVersion"
     if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
     $codexLauncher = Join-Path $cliRoot 'node_modules\.bin\codex.cmd'
     $geminiLauncher = Join-Path $cliRoot 'node_modules\.bin\gemini.cmd'

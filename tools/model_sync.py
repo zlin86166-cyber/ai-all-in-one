@@ -56,6 +56,7 @@ def eligible_models(family: str, org: str, limit_b: float) -> list[dict[str, Any
             "id": model_id,
             "parameters_b": size,
             "last_modified": item.get("lastModified"),
+            "revision": item.get("sha"),
             "downloads": item.get("downloads"),
             "likes": item.get("likes"),
             "pipeline_tag": item.get("pipeline_tag"),
