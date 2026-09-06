@@ -15,13 +15,15 @@ foreach ($cand in $pythonCandidates) {
 }
 if (-not $pythonExecutable) { throw 'Python with PyInstaller was not found.' }
 
+$entry = Join-Path $appRoot 'desktop_geek.py'
+if (-not (Test-Path -LiteralPath $entry)) { $entry = Join-Path $appRoot 'desktop.py' }
 $buildRoot = Join-Path $appRoot '.build\pyinstaller'
 $specRoot = Join-Path $appRoot '.build\spec'
 New-Item -ItemType Directory -Path $buildRoot, $specRoot -Force | Out-Null
 
 $arguments = @(
     '-m', 'PyInstaller',
-    (Join-Path $appRoot 'desktop.py'),
+    $entry,
     '--name', 'AIHub',
     '--onefile',
     '--windowed',
@@ -39,12 +41,11 @@ try {
     & $pythonExecutable @arguments
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 }
-finally {
-    Pop-Location
-}
+finally { Pop-Location }
 
 $output = Join-Path $appRoot 'AIHub.exe'
 if (-not (Test-Path -LiteralPath $output)) { throw 'AIHub.exe was not created.' }
 $hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
 Write-Host "Desktop executable: $output"
+Write-Host "Theme entry: $entry"
 Write-Host "SHA256: $($hash.Hash)"
