@@ -5,7 +5,7 @@
 ## 主要能力
 
 - **雙介面**：Web 版使用 `web/geek.css`；原生 Tkinter 版透過 `desktop_geek.py` 套用同一套白色極客配色。
-- **CLI AI**：直接使用 Codex CLI 與 Gemini CLI。產品規格不包含獨立 GPT/ChatGPT CLI provider。
+- **CLI AI**：直接使用 Codex CLI 與 Gemini CLI。
 - **本機/開源 AI**：Ollama 自動發現；vLLM、SGLang、llama.cpp、LM Studio 等可透過 OpenAI-compatible endpoint 接入。
 - **多專案 + 檔案範圍**：檔案瀏覽、預覽、選取指定檔案、編輯/儲存、匯入/匯出、下載與開啟本機程式。
 - **多 AI 協作**：Planner DAG → 依賴/分工 → 安全並行 → Peer Review → 最終彙整；只使用使用者選取的 AI。
