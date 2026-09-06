@@ -1,5 +1,3 @@
-param([switch]$Web)
-
 $ErrorActionPreference = 'Stop'
 $appRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $watchdog = Join-Path $appRoot 'watchdog.ps1'
@@ -10,13 +8,11 @@ $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $args = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    if ($Web) { $args += ' -Web' }
     Start-Process powershell.exe -ArgumentList $args -Verb RunAs
     exit 0
 }
 
 $watchdogArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchdog`""
-if ($Web) { $watchdogArgs += ' -Web' }
 $watchdogAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $watchdogArgs -WorkingDirectory $appRoot
 $watchdogTrigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
@@ -30,5 +26,5 @@ if (Test-Path -LiteralPath $modelSync) {
 }
 
 Start-ScheduledTask -TaskName 'AI Hub Watchdog'
-Write-Host 'Installed: AI Hub Watchdog (restart-on-exit loop)'
+Write-Host 'Installed: AI Hub Watchdog (native desktop restart-on-exit loop)'
 if (Test-Path -LiteralPath $modelSync) { Write-Host 'Installed: AI Hub Model Sync (daily)' }
