@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import argparse
 import html.parser
-import re
+import sys
 import urllib.parse
 import urllib.request
 from collections import deque
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from ai_hub.application import AIHubApplication
 
@@ -49,14 +53,21 @@ def links_from(url: str, max_bytes: int = 1_000_000) -> list[str]:
         parsed = urllib.parse.urlparse(absolute)
         if parsed.scheme not in {"http", "https"} or parsed.hostname != base.hostname:
             continue
-        clean = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, parsed.query, ""))
+        clean = urllib.parse.urlunparse(
+            (parsed.scheme, parsed.netloc, parsed.path, parsed.params, parsed.query, "")
+        )
         if clean not in seen:
             seen.add(clean)
             result.append(clean)
     return result
 
 
-def crawl(app: AIHubApplication, seeds: list[str], max_pages: int, max_depth: int) -> tuple[int, int]:
+def crawl(
+    app: AIHubApplication,
+    seeds: list[str],
+    max_pages: int,
+    max_depth: int,
+) -> tuple[int, int]:
     queue = deque((url, 0) for url in seeds)
     visited: set[str] = set()
     saved = 0
@@ -83,13 +94,14 @@ def crawl(app: AIHubApplication, seeds: list[str], max_pages: int, max_depth: in
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Bounded recursive research crawler for AI Hub")
+    parser = argparse.ArgumentParser(
+        description="Bounded recursive research crawler for AI Hub"
+    )
     parser.add_argument("urls", nargs="+")
     parser.add_argument("--max-pages", type=int, default=25)
     parser.add_argument("--max-depth", type=int, default=2)
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
-    app = AIHubApplication(root)
+    app = AIHubApplication(ROOT)
     try:
         saved, failed = crawl(
             app,
