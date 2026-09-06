@@ -8,7 +8,7 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 |---|---|---|
 | White clean geek interface | DONE | Web uses base CSS + `web/geek.css`; native desktop uses `desktop_geek.py` palette wrapper and build entry. |
 | Gemini CLI conversation | DONE | `GeminiProvider`. |
-| Codex CLI conversation | DONE | `CodexProvider`. No separate GPT/ChatGPT CLI provider is part of the product specification. |
+| Codex CLI conversation | DONE | `CodexProvider`. |
 | Execution progress / ETA / predicted end | DONE | Task/event/progress/predicted time fields and UI. |
 | Other open-source AI | DONE | Ollama discovery plus OpenAI-compatible endpoints. |
 | Multiple projects / selected files | DONE | Project scope, file explorer, preview, selected files, write controls. |
