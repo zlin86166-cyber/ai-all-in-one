@@ -3,8 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -16,8 +17,54 @@ jobs:
       - run: python -m pip install --upgrade pyinstaller
       - shell: powershell
         run: ./build-desktop.ps1
+      - name: Package native Windows release
+        shell: powershell
+        run: |
+          $packageRoot = Join-Path $PWD 'release\AIHub-Windows'
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          $files = @(
+            'AIHub.exe',
+            'AIHubModelSync.exe',
+            'AIHubPlayPublish.exe',
+            'AIHubSitesAssist.exe',
+            'setup.ps1',
+            'start.ps1',
+            'start.cmd',
+            'watchdog.ps1',
+            'install-watchdog.ps1',
+            'remove-watchdog.ps1',
+            'sync-models.ps1',
+            'README.md'
+          )
+          foreach ($file in $files) {
+            if (-not (Test-Path -LiteralPath $file)) { throw "Release input missing: $file" }
+            Copy-Item -LiteralPath $file -Destination $packageRoot -Force
+          }
+          Copy-Item -LiteralPath 'training' -Destination $packageRoot -Recurse -Force
+          $hashes = Get-ChildItem -LiteralPath $packageRoot -Filter '*.exe' | ForEach-Object {
+            $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
+            "$($hash.Hash)  $($_.Name)"
+          }
+          $hashes | Set-Content -LiteralPath (Join-Path $packageRoot 'SHA256SUMS.txt') -Encoding UTF8
+          Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath 'AIHub-Windows.zip' -CompressionLevel Optimal -Force
       - uses: actions/upload-artifact@v4
         with:
           name: AIHub-Windows-${{ github.sha }}
-          path: AIHub.exe
+          path: |
+            AIHub-Windows.zip
+            AIHub.exe
           if-no-files-found: error
+      - name: Attach package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          gh release view $tag --repo '${{ github.repository }}' *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag 'AIHub-Windows.zip' --clobber --repo '${{ github.repository }}'
+          }
+          else {
+            gh release create $tag 'AIHub-Windows.zip' --generate-notes --title "AI Hub $tag" --repo '${{ github.repository }}'
+          }
