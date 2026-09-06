@@ -176,11 +176,7 @@ function durationLabel(seconds) {
 function taskDisplayProgress(task) {
   const actual = Number(task.progress || 0);
   if (task.status === "completed") return 100;
-  if (!["running", "queued", "cancelling"].includes(task.status)) return actual;
-  if (!task.started_at || !task.predicted_seconds) return Math.max(actual, task.status === "queued" ? 0 : 3);
-  const elapsed = (Date.now() - new Date(task.started_at).getTime()) / 1000;
-  const estimated = Math.min(92, (elapsed / Number(task.predicted_seconds)) * 82);
-  return Math.max(actual, estimated);
+  return Math.max(0, Math.min(100, actual));
 }
 
 function taskRemaining(task) {

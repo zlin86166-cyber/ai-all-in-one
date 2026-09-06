@@ -19,6 +19,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "performance_memory_threshold": 90,
     "max_parallel_agents": 3,
     "auto_peer_review": True,
+    "unsafe_full_cli": False,
+    "allow_private_research": False,
+    "maintenance_enabled": True,
     "provider_config": {
         "compatible": {
             "base_url": "http://127.0.0.1:8000/v1",

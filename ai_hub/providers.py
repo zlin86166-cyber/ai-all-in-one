@@ -188,7 +188,11 @@ def _run_process(
     while process.poll() is None or not finished_output:
         if cancel.is_set() and process.poll() is None:
             emit("正在停止", "已送出停止訊號", None, "warning")
-            process.terminate()
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
@@ -241,7 +245,8 @@ class CodexProvider(BaseProvider):
         arguments: list[str] = []
         if context.web_access:
             arguments.append("--search")
-        if context.permission_mode == "full":
+        unsafe_full = os.environ.get("AI_HUB_UNSAFE_FULL_CLI") == "1"
+        if context.permission_mode == "full" and unsafe_full:
             arguments.append("--dangerously-bypass-approvals-and-sandbox")
         else:
             arguments.extend(["--ask-for-approval", "never"])
@@ -258,7 +263,7 @@ class CodexProvider(BaseProvider):
         ])
         if context.permission_mode == "observe":
             arguments.extend(["--sandbox", "read-only"])
-        elif context.permission_mode == "workspace":
+        elif context.permission_mode in {"workspace", "full"} and not unsafe_full:
             arguments.extend(["--sandbox", "workspace-write"])
         arguments.append("-")
         session_id: str | None = None
@@ -341,9 +346,10 @@ class GeminiProvider(BaseProvider):
         arguments = ["--skip-trust", "--output-format", "json"]
         if context.model:
             arguments.extend(["--model", context.model])
-        if context.permission_mode == "full":
+        unsafe_full = os.environ.get("AI_HUB_UNSAFE_FULL_CLI") == "1"
+        if context.permission_mode == "full" and unsafe_full:
             arguments.append("--yolo")
-        elif context.permission_mode == "workspace":
+        elif context.permission_mode in {"workspace", "full"}:
             arguments.extend(["--approval-mode", "auto_edit"])
         else:
             arguments.extend(["--approval-mode", "plan"])

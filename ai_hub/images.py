@@ -231,6 +231,14 @@ class ImageGenerationManager:
         thread.start()
         return task
 
+    @classmethod
+    def _interrupt(cls, base_url: str, prompt_id: str) -> None:
+        for endpoint, payload in (("/queue", {"delete": [prompt_id]}), ("/interrupt", {})):
+            try:
+                cls._request_json(base_url + endpoint, payload, timeout=3)
+            except Exception:
+                pass
+
     def _worker(
         self,
         task_id: str,
@@ -283,15 +291,13 @@ class ImageGenerationManager:
                 if prompt_id in response:
                     history = response[prompt_id]
                     break
-                progress = min(92, 8 + elapsed / max(1, metadata["steps"] * 5) * 78)
-                self.database.update_task(task_id, stage="生成圖片中", progress=progress)
+                self.database.update_task(task_id, stage="生成圖片中")
                 if elapsed - last_event >= 12:
-                    self.database.add_task_event(
-                        task_id, f"ComfyUI 仍在生成，已等待 {int(elapsed)} 秒。", progress=progress
-                    )
+                    self.database.add_task_event(task_id, f"ComfyUI 仍在生成，已等待 {int(elapsed)} 秒；節點未提供可驗證百分比。", progress=None)
                     last_event = elapsed
             if cancel.is_set():
-                raise InterruptedError("繪圖工作已停止。")
+                self._interrupt(base_url, prompt_id)
+                raise InterruptedError("繪圖工作已停止，並已要求 ComfyUI 中斷佇列工作。")
             if history is None:
                 raise ValueError("ComfyUI 沒有回傳歷史結果。")
             status = history.get("status") or {}

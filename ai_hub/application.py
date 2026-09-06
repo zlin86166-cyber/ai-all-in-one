@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import os
 import subprocess
 import threading
@@ -16,11 +17,11 @@ from .config import AppPaths, Settings
 from .crawler import ResearchCrawler
 from .db import Database
 from .evaluator import FeasibilityEvaluator
-from .hardware import HardwareMonitor
+from .hardware_v2 import HardwareMonitor
 from .images import ImageGenerationManager
-from .models import ModelManager
-from .orchestrator import CollaborationOrchestrator
-from .providers import ProviderRegistry
+from .model_manager_v2 import ModelManager
+from .orchestrator_v2 import CollaborationOrchestrator
+from .provider_registry_v2 import ProviderRegistry
 from .scheduler import Scheduler
 from .security import (
     FULL_ACCESS_PHRASE,
@@ -31,8 +32,12 @@ from .security import (
     path_inside,
     requires_account_approval,
     scoped_path,
+    require_write_mode,
+    validate_workspace_command,
 )
-from .tasks import TaskManager
+from .task_manager_v2 import TaskManager
+from .integrations import IntegrationManager
+from .maintenance import DataMaintenance
 
 
 class ApprovalRequired(PermissionError):
@@ -45,6 +50,8 @@ class AIHubApplication:
     def __init__(self, root: Path):
         self.paths = AppPaths.create(root)
         self.settings = Settings(self.paths.settings)
+        self.session_token = secrets.token_urlsafe(32)
+        os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
         # Full access is process-local: another diagnostic process cannot revoke or inherit it.
         self._full_access_unlocked_until: datetime | None = None
         self.database = Database(self.paths.database)
@@ -55,12 +62,15 @@ class AIHubApplication:
         self.orchestrator = CollaborationOrchestrator(
             self.database,
             self.tasks,
-            lambda: int(self.settings.get("max_parallel_agents", 3)),
+            lambda: self.hardware.recommended_parallelism(int(self.settings.get("max_parallel_agents", 3))),
         )
         self.models = ModelManager(self.paths, self.hardware, self.tasks)
         self.images = ImageGenerationManager(
             self.paths, self.settings, self.database, self.tasks
         )
+        self.integrations = IntegrationManager(self.paths, self.database, self.tasks)
+        self.maintenance = DataMaintenance(self.database, self.paths.data)
+        self._recovery_done = False
         self.crawler = ResearchCrawler(self.database, self.settings)
         self.scheduler = Scheduler(self.database, self._dispatch_schedule)
         self._server = None
@@ -73,6 +83,10 @@ class AIHubApplication:
             self.database.create_conversation(self.default_project["id"])
 
     def start_background(self) -> None:
+        if not self._recovery_done:
+            self._recovery_done = True
+            self.orchestrator.recover_incomplete()
+            self.tasks.recover_incomplete(exclude={'collaboration'})
         self.scheduler.start()
         if not self._resource_thread.is_alive():
             self._resource_thread.start()
@@ -84,11 +98,13 @@ class AIHubApplication:
                     bool(self.settings.get("adaptive_performance", False)),
                     int(self.settings.get("performance_memory_threshold", 90)),
                 )
+                if self.settings.get('maintenance_enabled', True):
+                    self.maintenance.maybe_run()
             except Exception as error:
                 self.database.audit("performance.update_failed", "system", {"error": str(error)})
 
     def serve(self, host: str, port: int, open_browser: bool = True) -> None:
-        from .server import create_server
+        from .server_v2 import create_server
 
         self.start_background()
         self._server = create_server(self, host, port)
@@ -103,6 +119,10 @@ class AIHubApplication:
             self.stop()
 
     def stop(self) -> None:
+        try:
+            (self.paths.data / 'normal-exit.marker').write_text(utcnow() if 'utcnow' in globals() else datetime.now(timezone.utc).isoformat(), encoding='utf-8')
+        except OSError:
+            pass
         self.scheduler.stop()
         self._resource_stop.set()
         if self._server:
@@ -125,6 +145,8 @@ class AIHubApplication:
             "schedules": self.database.list_schedules(),
             "approvals": self.database.pending_approvals(),
             "research": self.database.list_research_documents(),
+            "integrations": self.integrations.status(),
+            "resource_policy": self.hardware.resource_policy(int(self.settings.get("max_parallel_agents", 3))),
         }
 
     def public_settings(self) -> dict[str, Any]:
@@ -163,6 +185,7 @@ class AIHubApplication:
             "language", "permission_mode", "web_access", "crawler_enabled",
             "crawler_allowlist", "adaptive_performance", "performance_memory_threshold",
             "max_parallel_agents", "auto_peer_review", "provider_config",
+            "allow_private_research", "maintenance_enabled",
         }
         clean = {key: value for key, value in values.items() if key in allowed}
         if "max_parallel_agents" in clean:
@@ -172,6 +195,7 @@ class AIHubApplication:
                 70, min(int(clean["performance_memory_threshold"]), 98)
             )
         updated = self.settings.update(clean)
+        os.environ['AI_HUB_UNSAFE_FULL_CLI'] = '1' if self.settings.get('unsafe_full_cli', False) else '0'
         self.providers.invalidate()
         self.database.audit("settings.updated", "settings", {"keys": list(clean)})
         return {**updated, "full_access_unlocked": self.full_access_unlocked()}
@@ -340,6 +364,7 @@ class AIHubApplication:
                 feasibility,
                 web_access,
                 bool(payload.get("peer_review", self.settings.get("auto_peer_review", True))),
+                selected_files,
             )
             tasks = [task]
         else:
@@ -372,6 +397,7 @@ class AIHubApplication:
         project = self.get_project(payload.get("project_id"))
         mode = str(payload.get("permission_mode") or "workspace")
         self._check_permission_mode(mode)
+        validate_workspace_command(command, project['path'], mode)
         classification = classify_command(command)
         approval_payload = {"command": command, "project_id": project["id"], "mode": mode}
         if classification["requires_approval"]:
@@ -574,6 +600,50 @@ class AIHubApplication:
         self.database.audit("training.started", task["id"], approval_payload)
         return {"task": task, "preflight": preflight}
 
+
+    def sync_models(self, payload: dict[str, Any]) -> dict[str, Any]:
+        project = self.get_project(payload.get("project_id"))
+        task = self.integrations.sync_models(project, payload.get("conversation_id"))
+        self.database.audit("model.sync.started", task["id"])
+        return {"task": task}
+
+    def pull_model(self, payload: dict[str, Any]) -> dict[str, Any]:
+        project = self.get_project(payload.get("project_id"))
+        mode = str(payload.get("permission_mode") or "workspace")
+        self._check_permission_mode(mode); require_write_mode(mode)
+        model_id = str(payload.get("model_id") or "")
+        approval_payload = {"model_id": model_id, "project_id": project["id"]}
+        self._require_approval("download", f"允許下載模型一次？\n{model_id}", approval_payload, payload.get("approval_id"))
+        task = self.models.pull(model_id, project, payload.get("conversation_id"))
+        self.database.audit("model.pull.started", task["id"], approval_payload)
+        return {"task": task}
+
+    def publish_play(self, payload: dict[str, Any]) -> dict[str, Any]:
+        project = self.get_project(payload.get("project_id")); mode = str(payload.get("permission_mode") or "full")
+        self._check_permission_mode(mode)
+        if mode != "full": raise PermissionError("Google Play 發布需要完整權限模式。")
+        artifact = canonical_path(str(payload.get("artifact") or ""))
+        if not artifact.is_file() or artifact.suffix.lower() not in {".apk", ".aab"}: raise ValueError("請選擇存在的 APK/AAB。")
+        package = str(payload.get("package") or "").strip(); track = str(payload.get("track") or "internal"); status = str(payload.get("status") or "draft")
+        commit = bool(payload.get("commit")); approval_payload={"package":package,"artifact":str(artifact),"track":track,"status":status,"commit":commit}
+        self._require_approval("publish", "允許這一次 Google Play 驗證/發布操作？" + ("\n包含 COMMIT" if commit else "\n只驗證，不 COMMIT"), approval_payload, payload.get("approval_id"))
+        task=self.integrations.publish_play(project,package,artifact,track,status,commit,payload.get("conversation_id")); self.database.audit("play.publish.started",task["id"],approval_payload); return {"task":task}
+
+    def open_sites(self, payload: dict[str, Any]) -> dict[str, Any]:
+        project=self.get_project(payload.get("project_id")); title=str(payload.get("title") or "").strip()
+        if not title: raise ValueError("Sites 標題不可為空。")
+        approval_payload={"title":title,"profile":payload.get("profile"),"template_url":payload.get("template_url")}
+        self._require_approval("account", "允許開啟這一次 Google Sites 帳號建站工作階段？", approval_payload, payload.get("approval_id"))
+        task=self.integrations.open_sites(project,title,payload.get("profile"),payload.get("template_url"),payload.get("conversation_id")); self.database.audit("sites.session.started",task["id"],approval_payload); return {"task":task}
+
+    def research_fetch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.settings.get("crawler_enabled", False): raise PermissionError("研究爬蟲目前停用。")
+        return self.crawler.fetch(str(payload.get("url") or ""))
+
+    def run_maintenance(self, payload: dict[str, Any]) -> dict[str, Any]:
+        mode=str(payload.get("permission_mode") or "workspace"); self._check_permission_mode(mode)
+        return self.maintenance.maybe_run(force=True) or {"ok":True}
+
     def list_files(self, project_id: str, path: str | None = None) -> dict[str, Any]:
         project = self.get_project(project_id)
         target = scoped_path(path or project["path"], project["path"])
@@ -626,6 +696,7 @@ class AIHubApplication:
         project = self.get_project(payload.get("project_id"))
         mode = str(payload.get("permission_mode") or "workspace")
         self._check_permission_mode(mode)
+        require_write_mode(mode)
         target = scoped_path(payload.get("path", ""), project["path"], full_access=mode == "full")
         content = str(payload.get("content") or "")
         existed = target.exists()
@@ -648,6 +719,7 @@ class AIHubApplication:
         project = self.get_project(payload.get("project_id"))
         mode = str(payload.get("permission_mode") or "workspace")
         self._check_permission_mode(mode)
+        require_write_mode(mode)
         target = scoped_path(
             payload.get("path", ""), project["path"], full_access=mode == "full"
         )
@@ -723,7 +795,7 @@ class AIHubApplication:
         self.database.audit("path.opened", str(target))
         return {"opened": str(target)}
 
-    def _dispatch_schedule(self, schedule: dict[str, Any]) -> None:
+    def _dispatch_schedule(self, schedule: dict[str, Any]) -> dict[str, Any] | None:
         project = self.get_project(schedule["project_id"])
         if schedule.get("mode") == "image":
             task = self.images.launch(
@@ -735,7 +807,7 @@ class AIHubApplication:
             )
             timer.daemon = True
             timer.start()
-            return
+            return task
         provider_ids = [
             item for item in schedule.get("provider_ids", [])
             if self.providers.status_map().get(item, {}).get("available")
@@ -773,3 +845,4 @@ class AIHubApplication:
         )
         timer.daemon = True
         timer.start()
+        return task

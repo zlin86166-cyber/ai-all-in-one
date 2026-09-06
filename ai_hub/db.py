@@ -5,7 +5,7 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -685,7 +685,19 @@ class Database:
         if not approval_id:
             return False
         row = self.get_approval(approval_id)
-        return bool(row and row["status"] == "approved" and row["fingerprint"] == fingerprint)
+        if not row or row["status"] != "approved" or row["fingerprint"] != fingerprint:
+            return False
+        try:
+            created = datetime.fromisoformat(row["created_at"])
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - created.astimezone(timezone.utc) > timedelta(minutes=5):
+                self._execute("UPDATE approvals SET status = 'expired', resolved_at = ? WHERE id = ?", (utcnow(), approval_id))
+                return False
+        except (TypeError, ValueError):
+            return False
+        self._execute("UPDATE approvals SET status = 'consumed', resolved_at = ? WHERE id = ? AND status = 'approved'", (utcnow(), approval_id))
+        return True
 
     def pending_approvals(self) -> list[dict[str, Any]]:
         return [self._decode(row) or {} for row in self._all(
