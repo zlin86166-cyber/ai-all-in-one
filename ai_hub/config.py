@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 
+APP_VERSION = "0.2.0"
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "zh-TW",
     "permission_mode": "workspace",
@@ -64,6 +66,21 @@ MODEL_CATALOG: list[dict[str, Any]] = [
         "disk_gb": 5,
         "recommended": True,
         "notes": "一般 16 GB RAM Windows 主機的實用本機推論選擇",
+        "training_model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    },
+    {
+        "id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "family": "DeepSeek",
+        "label": "DeepSeek R1 Distill Qwen 7B · QLoRA",
+        "parameters_b": 7,
+        "runtime": "transformers",
+        "install": None,
+        "ram_gb": 20,
+        "disk_gb": 18,
+        "recommended": False,
+        "notes": "QLoRA 專用官方 Hugging Face 權重；下載與訓練分開核准",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "hf_repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
         "training_model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
     },
     {

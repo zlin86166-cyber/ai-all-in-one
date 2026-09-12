@@ -70,10 +70,34 @@ class TaskManager:
         for old in self.database.list_tasks(active_only=True, limit=500):
             if old.get("provider_id") in exclude:
                 continue
+            status = str(old.get("status") or "")
+            if status == "cancelling":
+                self.database.update_task(
+                    old["id"],
+                    status="cancelled",
+                    stage="已停止",
+                    error="使用者在程序關閉前已要求停止；不會在重啟時自動重試。",
+                    completed_at=utcnow(),
+                )
+                continue
+            if old.get("parent_task_id"):
+                self.database.update_task(
+                    old["id"],
+                    status="interrupted",
+                    stage="父任務將負責復原",
+                    error="這是父工作流程的子任務；由父任務 checkpoint 統一復原。",
+                    completed_at=utcnow(),
+                )
+                continue
             metadata = old.get("metadata") or {}
             resume = metadata.get("resume_payload") if isinstance(metadata, dict) else None
-            self.database.update_task(old["id"], status="interrupted", stage="程序重啟，已中斷",
-                                      error="AI Hub 上次程序非正常結束；已進入復原流程。", completed_at=utcnow())
+            self.database.update_task(
+                old["id"],
+                status="interrupted",
+                stage="程序重啟，已中斷",
+                error="AI Hub 上次程序非正常結束；已進入復原流程。",
+                completed_at=utcnow(),
+            )
             if not isinstance(resume, dict) or not metadata.get("recoverable", True):
                 continue
             attempt = int(metadata.get("attempt") or 1) + 1

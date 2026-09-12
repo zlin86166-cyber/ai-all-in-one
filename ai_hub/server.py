@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import base64
+import hmac
+import ipaddress
 import json
 import mimetypes
 import re
 import traceback
 import urllib.parse
 from http import HTTPStatus
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 from .application import AIHubApplication, ApprovalRequired
+from .config import APP_VERSION
 
 
 class APIError(RuntimeError):
@@ -21,7 +25,19 @@ class APIError(RuntimeError):
         self.details = details or {}
 
 
+def _is_loopback_host(host: str) -> bool:
+    normalized = str(host or "").strip().lower().strip("[]")
+    if normalized == "localhost":
+        return True
+    try:
+        return bool(ipaddress.ip_address(normalized).is_loopback)
+    except ValueError:
+        return False
+
+
 def create_server(app: AIHubApplication, host: str, port: int) -> ThreadingHTTPServer:
+    if not _is_loopback_host(host):
+        raise ValueError("AI Hub 本機 API 只允許繫結到 loopback 位址。")
     class Handler(AIHubHandler):
         application = app
 
@@ -32,7 +48,7 @@ def create_server(app: AIHubApplication, host: str, port: int) -> ThreadingHTTPS
 
 class AIHubHandler(BaseHTTPRequestHandler):
     application: AIHubApplication
-    server_version = "AIHub/0.1"
+    server_version = f"AIHub/{APP_VERSION}"
 
     def log_message(self, format_string: str, *args: Any) -> None:
         if self.path.startswith("/api/") and not self.path.startswith("/api/health"):
@@ -95,11 +111,32 @@ class AIHubHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         return parsed.path, urllib.parse.parse_qs(parsed.query)
 
+    def _require_api_session(self) -> None:
+        cookie = SimpleCookie()
+        try:
+            cookie.load(self.headers.get("Cookie", ""))
+        except CookieError as error:
+            raise APIError(400, "Cookie 格式無效。") from error
+        session = cookie.get("ai_hub_session")
+        if not session or not hmac.compare_digest(session.value, self.application.session_token):
+            raise APIError(401, "需要本機工作階段；請從 AI Hub 入口頁重新載入。")
+        origin = self.headers.get("Origin")
+        if origin:
+            parsed = urllib.parse.urlparse(origin)
+            expected_host = self.headers.get("Host", "")
+            if (
+                parsed.scheme not in {"http", "https"}
+                or parsed.netloc.lower() != expected_host.lower()
+            ):
+                raise APIError(403, "拒絕跨來源 API 請求。")
+
     def do_GET(self) -> None:
         try:
             path, query = self._route()
+            if path.startswith("/api/") and path != "/api/health":
+                self._require_api_session()
             if path == "/api/health":
-                self._send_json({"ok": True, "version": "0.1.0"})
+                self._send_json({"ok": True, "version": APP_VERSION})
                 return
             if path == "/api/bootstrap":
                 self._send_json(self.application.bootstrap())
@@ -183,6 +220,8 @@ class AIHubHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             path, _query = self._route()
+            if path.startswith("/api/") and path != "/api/health":
+                self._require_api_session()
             payload = self._json_body(15_000_000 if path == "/api/files/import" else 12_000_000)
             if path == "/api/projects":
                 self._send_json(self.application.add_project(str(payload.get("path") or ""), payload.get("name")), 201)
@@ -256,13 +295,13 @@ class AIHubHandler(BaseHTTPRequestHandler):
             if path == "/api/models/pull":
                 project = self.application.get_project(payload.get("project_id"))
                 self._send_json(
-                    self.application.models.pull(str(payload.get("model_id") or ""), project, payload.get("conversation_id")),
+                    self.application.pull_model(payload),
                     202,
                 )
                 self.application.providers.invalidate()
                 return
             if path == "/api/research/fetch":
-                self._send_json(self.application.crawler.fetch(str(payload.get("url") or "")), 201)
+                self._send_json(self.application.research_fetch(payload), 201)
                 return
             if path == "/api/images/generate":
                 project = self.application.get_project(payload.get("project_id"))
@@ -308,6 +347,8 @@ class AIHubHandler(BaseHTTPRequestHandler):
     def do_PATCH(self) -> None:
         try:
             path, _query = self._route()
+            if path.startswith("/api/") and path != "/api/health":
+                self._require_api_session()
             payload = self._json_body()
             match = re.fullmatch(r"/api/conversations/([^/]+)", path)
             if match:
@@ -336,6 +377,10 @@ class AIHubHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", f"{content_type}; charset=utf-8" if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"} else content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header(
+            "Set-Cookie",
+            f"ai_hub_session={self.application.session_token}; HttpOnly; SameSite=Strict; Path=/",
+        )
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self';")
         self.end_headers()

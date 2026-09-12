@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import json
 import secrets
 import os
@@ -13,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import AppPaths, Settings
+from .config import APP_VERSION, AppPaths, Settings
 from .crawler import ResearchCrawler
 from .db import Database
 from .evaluator import FeasibilityEvaluator
@@ -33,11 +34,20 @@ from .security import (
     requires_account_approval,
     scoped_path,
     require_write_mode,
+    validate_network_url,
     validate_workspace_command,
 )
 from .task_manager_v2 import TaskManager
 from .integrations import IntegrationManager
 from .maintenance import DataMaintenance
+
+def _is_windows_admin() -> bool:
+    if os.name != "nt":
+        return True
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
 
 
 class ApprovalRequired(PermissionError):
@@ -132,7 +142,7 @@ class AIHubApplication:
 
     def bootstrap(self) -> dict[str, Any]:
         return {
-            "version": "0.1.0",
+            "version": APP_VERSION,
             "app_root": str(self.paths.root),
             "projects": self.database.list_projects(),
             "conversations": self.database.list_conversations(),
@@ -168,6 +178,10 @@ class AIHubApplication:
     def unlock_full_access(self, phrase: str, minutes: int = 30) -> dict[str, Any]:
         if phrase.strip() != FULL_ACCESS_PHRASE:
             raise PermissionError("確認文字不正確。")
+        if os.name == "nt" and not _is_windows_admin():
+            raise PermissionError(
+                "完整系統權限需要以 Windows 系統管理員身分啟動；請使用 start.ps1 -Elevate -MaxControl。"
+            )
         minutes = max(5, min(int(minutes), 525_600))
         self._full_access_unlocked_until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
         until = self._full_access_unlocked_until.isoformat(timespec="seconds")
@@ -177,6 +191,7 @@ class AIHubApplication:
 
     def lock_full_access(self) -> dict[str, Any]:
         self._full_access_unlocked_until = None
+        self.settings.update({"full_access_enabled": False})
         self.database.audit("permission.full_access_locked", "system")
         return self.public_settings()
 
@@ -428,9 +443,7 @@ class AIHubApplication:
 
     def download_url(self, payload: dict[str, Any]) -> dict[str, Any]:
         url = str(payload.get("url") or "").strip()
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("請輸入有效的 HTTP/HTTPS 下載網址。")
+        parsed = validate_network_url(url)
         project = self.get_project(payload.get("project_id"))
         mode = str(payload.get("permission_mode") or "workspace")
         self._check_permission_mode(mode)
@@ -801,6 +814,10 @@ class AIHubApplication:
             task = self.images.launch(
                 {"prompt": schedule["prompt"]}, project, conversation_id=None
             )
+            self.database.update_task(
+                task["id"],
+                metadata_json={**(task.get("metadata") or {}), "schedule_id": schedule["id"]},
+            )
             timer = threading.Timer(
                 max(1, int(schedule["duration_minutes"])) * 60,
                 lambda: self.tasks.cancel(task["id"]),
@@ -838,6 +855,10 @@ class AIHubApplication:
             feasibility,
             bool(self.settings.get("web_access", True)),
             bool(self.settings.get("auto_peer_review", True)),
+        )
+        self.database.update_task(
+            task["id"],
+            metadata_json={**(task.get("metadata") or {}), "schedule_id": schedule["id"]},
         )
         timer = threading.Timer(
             max(1, int(schedule["duration_minutes"])) * 60,

@@ -31,10 +31,10 @@ def request_json(url: str) -> Any:
 
 
 def parameters_b(model: dict[str, Any]) -> float | None:
-    safetensors = model.get("safetensors") or {}
-    total = safetensors.get("total")
-    if isinstance(total, (int, float)) and total > 0:
-        return round(float(total) / 1_000_000_000, 2)
+    for key in ("parameter_count", "num_parameters", "parameters"):
+        value = model.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return round(float(value) / 1_000_000_000, 2)
     model_id = str(model.get("id") or "")
     values = [float(value) for value in SIZE_PATTERN.findall(model_id)]
     return max(values) if values else None
@@ -94,6 +94,13 @@ def find_hf() -> str | None:
     return shutil.which("hf") or shutil.which("huggingface-cli")
 
 
+def _verified_weight_directory(target: Path) -> bool:
+    return bool(
+        (target / "config.json").is_file()
+        and any(target.rglob("*.safetensors"))
+    )
+
+
 def download_model(model_id: str, target_root: Path) -> Path:
     executable = find_hf()
     if not executable:
@@ -105,6 +112,10 @@ def download_model(model_id: str, target_root: Path) -> Path:
     completed = subprocess.run(command, check=False)
     if completed.returncode:
         raise RuntimeError(f"Hugging Face 下載失敗，結束碼 {completed.returncode}")
+    if not _verified_weight_directory(target):
+        raise RuntimeError(
+            "Hugging Face 下載命令完成，但未找到 config.json 與 safetensors 權重。"
+        )
     (target / ".aihub-download-complete.json").write_text(
         json.dumps({"repository": model_id, "completed_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -112,13 +123,13 @@ def download_model(model_id: str, target_root: Path) -> Path:
     return target
 
 
-def train_model(model_id: str, dataset: Path, output: Path, epochs: float, rank: int) -> None:
+def train_model(model_path: Path, dataset: Path, output: Path, epochs: float, rank: int) -> None:
     root = application_root()
     script = root / "training" / "train_lora.py"
     python = os.environ.get("AI_HUB_TRAINING_PYTHON") or shutil.which("python") or shutil.which("py")
     if not script.is_file() or not python:
         raise RuntimeError("找不到發行包內的 QLoRA 腳本或外部 Python；可用 AI_HUB_TRAINING_PYTHON 指定 CUDA 訓練環境。")
-    command = [python, str(script), "--model", model_id, "--dataset", str(dataset), "--output", str(output), "--epochs", str(epochs), "--lora-rank", str(rank), "--max-seq-length", "2048"]
+    command = [python, str(script), "--model", str(model_path.resolve()), "--dataset", str(dataset), "--output", str(output), "--epochs", str(epochs), "--lora-rank", str(rank), "--max-seq-length", "2048"]
     print("RUN:", subprocess.list2cmdline(command), flush=True)
     completed = subprocess.run(command, check=False)
     if completed.returncode:
@@ -159,7 +170,7 @@ def main() -> int:
             if not args.approve_training:
                 raise SystemExit("模型已下載，但拒絕訓練：QLoRA 必須另外加入 --approve-training。")
             train_output = Path(args.train_output or (root / "training" / "output" / selected["id"].replace("/", "--")))
-            train_model(selected["id"], Path(args.dataset).resolve(), train_output.resolve(), args.epochs, args.lora_rank)
+            train_model(target, Path(args.dataset).resolve(), train_output.resolve(), args.epochs, args.lora_rank)
     return 0
 
 

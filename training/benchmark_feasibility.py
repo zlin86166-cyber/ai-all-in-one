@@ -55,6 +55,20 @@ def load_csv(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def compare_metrics(metrics: dict[str, dict[str, float]]) -> tuple[bool, dict[str, float]]:
+    names = ("brier", "ece", "log_loss")
+    deltas = {
+        name: round(metrics["ai_hub"][name] - metrics["baseline"][name], 6)
+        for name in names
+    }
+    better = bool(
+        metrics["ai_hub"]["brier"] < metrics["baseline"]["brier"]
+        and metrics["ai_hub"]["ece"] <= metrics["baseline"]["ece"]
+        and metrics["ai_hub"]["log_loss"] < metrics["baseline"]["log_loss"]
+    )
+    return better, deltas
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Head-to-head feasibility benchmark")
     parser.add_argument("csv")
@@ -68,10 +82,7 @@ def main() -> int:
             "ece": round(ece(rows, key), 6),
             "log_loss": round(log_loss(rows, key), 6),
         }
-    metrics["ai_hub_better"] = bool(
-        metrics["ai_hub"]["brier"] < metrics["baseline"]["brier"]
-        and metrics["ai_hub"]["ece"] <= metrics["baseline"]["ece"]
-    )
+    metrics["ai_hub_better"], metrics["delta_ai_hub_minus_baseline"] = compare_metrics(metrics)
     payload = {"samples": len(rows), "metrics": metrics}
     output = Path(args.output)
     if not output.is_absolute():

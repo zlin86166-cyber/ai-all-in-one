@@ -50,6 +50,15 @@ class CollaborationOrchestrator:
         for old in self.database.list_tasks(active_only=True, limit=500):
             if old.get("provider_id") != "collaboration":
                 continue
+            if old.get("status") == "cancelling":
+                self.database.update_task(
+                    old["id"],
+                    status="cancelled",
+                    stage="已停止",
+                    error="使用者在程序關閉前已要求停止；不會在重啟時自動重試。",
+                    completed_at=utcnow(),
+                )
+                continue
             meta = old.get("metadata") or {}
             self.database.update_task(old["id"], status="interrupted", stage="程序重啟，準備續跑",
                                       error="AI Hub 非正常結束；協作流程已從最近安全 checkpoint 復原。", completed_at=utcnow())

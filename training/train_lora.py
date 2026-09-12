@@ -64,6 +64,17 @@ def main() -> int:
     args = arguments()
     if not args.dataset.is_file():
         raise SystemExit(f"找不到資料集：{args.dataset}")
+    model_path = Path(args.model).expanduser().resolve()
+    if not (
+        model_path.is_dir()
+        and (model_path / ".aihub-download-complete.json").is_file()
+        and (model_path / "config.json").is_file()
+        and any(model_path.rglob("*.safetensors"))
+    ):
+        raise SystemExit(
+            "QLoRA 只接受已下載並驗證的本機 Hugging Face 權重；請先完成獨立下載工作。"
+        )
+    args.model = str(model_path)
     if args.eval_dataset and not args.eval_dataset.is_file():
         raise SystemExit(f"找不到驗證資料集：{args.eval_dataset}")
     d = load_dependencies(); torch=d["torch"]; load_dataset=d["load_dataset"]
@@ -76,9 +87,12 @@ def main() -> int:
         raise SystemExit(f"偵測到 {available_vram:.1f} GB CUDA VRAM；{args.model} 的保守 QLoRA 前檢需要至少 {required_vram} GB。")
 
     quantization=d["BitsAndBytesConfig"](load_in_4bit=True,bnb_4bit_quant_type="nf4",bnb_4bit_compute_dtype=torch.bfloat16,bnb_4bit_use_double_quant=True)
-    tokenizer=d["AutoTokenizer"].from_pretrained(args.model, revision=args.revision, trust_remote_code=args.trust_remote_code)
+    local_model_kwargs = {"local_files_only": True, "trust_remote_code": args.trust_remote_code}
+    if args.revision:
+        local_model_kwargs["revision"] = args.revision
+    tokenizer=d["AutoTokenizer"].from_pretrained(args.model, **local_model_kwargs)
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
-    model=d["AutoModelForCausalLM"].from_pretrained(args.model,revision=args.revision,device_map="auto",trust_remote_code=args.trust_remote_code,quantization_config=quantization)
+    model=d["AutoModelForCausalLM"].from_pretrained(args.model,device_map="auto",quantization_config=quantization,**local_model_kwargs)
     model=d["prepare_model_for_kbit_training"](model)
     model.add_adapter(d["LoraConfig"](r=args.lora_rank,lora_alpha=args.lora_rank*2,lora_dropout=.05,bias="none",task_type="CAUSAL_LM",target_modules="all-linear"))
 

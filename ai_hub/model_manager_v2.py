@@ -40,7 +40,7 @@ class ModelManager(BaseModelManager):
         for item in self._dynamic_entries():
             if item["id"] in existing: continue
             target = self.paths.downloads / "models" / item["id"].replace("/", "--")
-            installed = (target / ".aihub-download-complete.json").is_file() and (target / "config.json").is_file()
+            installed = self._hf_weight_ready(target)
             item["installed"] = installed; item["download_path"] = str(target)
             if installed: state, reason = "downloaded", "官方權重已下載；可接 vLLM/SGLang 或進行 QLoRA"
             elif disk < float(item["disk_gb"]) + 10: state, reason = "blocked", "磁碟安全空間不足"
@@ -66,19 +66,44 @@ class ModelManager(BaseModelManager):
 
     def training_preflight(self, model_id: str, dataset_path: str) -> dict[str, Any]:
         dynamic = next((item for item in self._dynamic_entries() if item["id"] == model_id), None)
-        if not dynamic: return super().training_preflight(model_id, dataset_path)
-        parameters = float(dynamic["parameters_b"]); dataset = self._validate_dataset(Path(dataset_path).expanduser().resolve())
-        requirements = self._training_requirements(parameters); hardware = self.hardware.snapshot(); cuda = self._cuda_probe()
-        ram = float(hardware.get("memory", {}).get("total_gb") or 0); disk = float(hardware.get("disk", {}).get("free_gb") or 0)
-        blockers = []
-        if not dataset["valid"]: blockers.append(str(dataset["error"]))
-        if not cuda["available"]: blockers.append("未偵測到可用 NVIDIA CUDA GPU")
-        elif float(cuda["vram_gb"]) < requirements["vram_gb"]: blockers.append(f"VRAM 需要至少 {requirements['vram_gb']:.0f} GB")
-        if ram < requirements["ram_gb"]: blockers.append(f"RAM 需要至少 {requirements['ram_gb']:.0f} GB，目前 {ram:.1f} GB")
-        if disk < requirements["disk_gb"]: blockers.append(f"可用磁碟需要至少 {requirements['disk_gb']:.0f} GB，目前 {disk:.1f} GB")
-        return {"ready": not blockers, "model_id": model_id, "training_model": model_id, "parameters_b": parameters,
-                "revision": dynamic.get("revision"), "dataset": dataset, "cuda": cuda, "requirements": requirements,
-                "detected": {"ram_gb": ram, "disk_gb": disk}, "blockers": blockers}
+        if not dynamic:
+            return super().training_preflight(model_id, dataset_path)
+        parameters = float(dynamic["parameters_b"])
+        dataset = self._validate_dataset(Path(dataset_path).expanduser().resolve())
+        requirements = self._training_requirements(parameters)
+        hardware = self.hardware.snapshot()
+        cuda = self._cuda_probe()
+        ram = float(hardware.get("memory", {}).get("total_gb") or 0)
+        disk = float(hardware.get("disk", {}).get("free_gb") or 0)
+        target = self.paths.downloads / "models" / model_id.replace("/", "--")
+        weights_ready = self._hf_weight_ready(target)
+        blockers: list[str] = []
+        if not dataset["valid"]:
+            blockers.append(str(dataset["error"]))
+        if not weights_ready:
+            blockers.append("模型權重尚未下載並驗證；請先完成下載，再啟動 QLoRA。")
+        if not cuda["available"]:
+            blockers.append("未偵測到可用 NVIDIA CUDA GPU")
+        elif float(cuda["vram_gb"]) < requirements["vram_gb"]:
+            blockers.append(f"VRAM 需要至少 {requirements['vram_gb']:.0f} GB，目前 {cuda['vram_gb']:.1f} GB")
+        if ram < requirements["ram_gb"]:
+            blockers.append(f"RAM 需要至少 {requirements['ram_gb']:.0f} GB，目前 {ram:.1f} GB")
+        if disk < requirements["disk_gb"]:
+            blockers.append(f"可用磁碟需要至少 {requirements['disk_gb']:.0f} GB，目前 {disk:.1f} GB")
+        return {
+            "ready": not blockers,
+            "model_id": model_id,
+            "training_model": str(target),
+            "parameters_b": parameters,
+            "weights_ready": weights_ready,
+            "revision": dynamic.get("revision"),
+            "dataset": dataset,
+            "cuda": cuda,
+            "requirements": requirements,
+            "detected": {"ram_gb": ram, "disk_gb": disk},
+            "blockers": blockers,
+        }
+
 
     def readiness(self) -> dict[str, Any]:
         value = super().readiness(); sync = self.paths.data / "latest-models.json"

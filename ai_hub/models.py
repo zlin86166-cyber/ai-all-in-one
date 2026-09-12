@@ -19,6 +19,14 @@ class ModelManager:
         self.hardware = hardware
         self.tasks = tasks
 
+    @staticmethod
+    def _hf_weight_ready(target: Path) -> bool:
+        return bool(
+            (target / ".aihub-download-complete.json").is_file()
+            and (target / "config.json").is_file()
+            and any(target.rglob("*.safetensors"))
+        )
+
     def installed(self) -> list[dict[str, Any]]:
         try:
             with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=1.5) as response:
@@ -51,12 +59,7 @@ class ModelManager:
             )
             hf_repository = item.get("hf_repo")
             hf_target = self.paths.downloads / "models" / str(hf_repository or "").replace("/", "--")
-            hf_installed = bool(
-                hf_repository
-                and (hf_target / ".aihub-download-complete.json").is_file()
-                and (hf_target / "config.json").is_file()
-                and any(hf_target.rglob("*.safetensors"))
-            )
+            hf_installed = bool(hf_repository and self._hf_weight_ready(hf_target))
             item["installed"] = ollama_installed or hf_installed
             if hf_repository:
                 item["download_path"] = str(hf_target)
@@ -217,9 +220,20 @@ class ModelManager:
         cuda = self._cuda_probe()
         ram = float(hardware.get("memory", {}).get("total_gb") or 0)
         disk = float(hardware.get("disk", {}).get("free_gb") or 0)
+        hf_repository = str(item.get("hf_repo") or "").strip()
+        hf_target = (
+            self.paths.downloads / "models" / hf_repository.replace("/", "--")
+            if hf_repository
+            else None
+        )
+        weights_ready = bool(hf_target and self._hf_weight_ready(hf_target))
         blockers: list[str] = []
         if not dataset["valid"]:
             blockers.append(str(dataset["error"]))
+        if not hf_repository:
+            blockers.append("此項目僅提供 Ollama 執行期模型；QLoRA 請先選擇官方 Hugging Face 權重項目。")
+        elif not weights_ready:
+            blockers.append("模型權重尚未下載並驗證；請先完成下載，再啟動 QLoRA。")
         if not cuda["available"]:
             blockers.append("未偵測到可用 NVIDIA CUDA GPU")
         elif float(cuda["vram_gb"]) < requirements["vram_gb"]:
@@ -231,14 +245,16 @@ class ModelManager:
         return {
             "ready": not blockers,
             "model_id": model_id,
-            "training_model": item["training_model"],
+            "training_model": str(hf_target) if hf_target else item["training_model"],
             "parameters_b": parameters,
+            "weights_ready": weights_ready,
             "dataset": dataset,
             "cuda": cuda,
             "requirements": requirements,
             "detected": {"ram_gb": ram, "disk_gb": disk},
             "blockers": blockers,
         }
+
 
     def train(
         self,

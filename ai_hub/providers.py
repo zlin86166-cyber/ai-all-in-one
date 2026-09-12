@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import AppPaths, Settings
+from .security import validate_network_url
 
 
 Emit = Callable[[str, str, float | None, str], None]
@@ -43,6 +44,17 @@ class ProviderResult:
 
 class ProviderError(RuntimeError):
     pass
+
+
+class _ValidatedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        validate_network_url(urllib.parse.urljoin(req.full_url, newurl))
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _safe_urlopen(request: urllib.request.Request, timeout: int):
+    opener = urllib.request.build_opener(_ValidatedRedirectHandler())
+    return opener.open(request, timeout=timeout)
 
 
 def _runtime_environment(paths: AppPaths) -> dict[str, str]:
@@ -672,6 +684,10 @@ class HuggingFacePullProvider(BaseProvider):
             raise ProviderError("模型權重下載已停止。")
         if code != 0:
             raise ProviderError(f"Hugging Face CLI 結束碼 {code}\n" + "\n".join(lines[-30:]))
+        if not (target / "config.json").is_file() or not any(target.rglob("*.safetensors")):
+            raise ProviderError(
+                "Hugging Face 下載命令完成，但未找到 config.json 與 safetensors 權重；拒絕標記為可訓練。"
+            )
         marker = target / ".aihub-download-complete.json"
         marker.write_text(
             json.dumps({"repository": repository, "completed_at": time.time()}, ensure_ascii=False),
@@ -695,9 +711,7 @@ class URLDownloadProvider(BaseProvider):
             raise ProviderError("下載工作格式無效。") from error
         url = str(payload.get("url") or "").strip()
         target = Path(str(payload.get("target") or "")).resolve()
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ProviderError("下載只支援有效的 HTTP/HTTPS 網址。")
+        parsed = validate_network_url(url)
         if context.permission_mode != "full":
             try:
                 target.relative_to(context.project_path.resolve())
@@ -716,7 +730,7 @@ class URLDownloadProvider(BaseProvider):
         started = time.monotonic()
         emit("建立下載連線", parsed.hostname, 2, "info")
         try:
-            with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as handle:
+            with _safe_urlopen(request, timeout=60) as response, temporary.open("wb") as handle:
                 total = int(response.headers.get("Content-Length") or 0)
                 while True:
                     if cancel.is_set():
@@ -826,6 +840,17 @@ class TrainingProvider(BaseProvider):
         model = str(payload.get("model") or "").strip()
         if not dataset.is_file() or not model:
             raise ProviderError("訓練模型或 JSONL 資料集不存在。")
+        model_path = Path(model).expanduser().resolve()
+        if not (
+            model_path.is_dir()
+            and (model_path / ".aihub-download-complete.json").is_file()
+            and (model_path / "config.json").is_file()
+            and any(model_path.rglob("*.safetensors"))
+        ):
+            raise ProviderError(
+                "QLoRA 只接受已下載並驗證的本機 Hugging Face 權重；下載與訓練必須分開。"
+            )
+        model = str(model_path)
         if context.permission_mode != "full":
             try:
                 dataset.relative_to(context.project_path.resolve())

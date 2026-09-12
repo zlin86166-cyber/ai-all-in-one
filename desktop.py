@@ -241,7 +241,7 @@ class AIHubDesktop:
         ).grid(row=4, column=0, sticky="w")
         ttk.Checkbutton(
             options,
-            text="負載加速（AC + RAM ≥ 90%）",
+            text="負載加速（AC + 記憶體低於門檻時）",
             variable=self.adaptive_var,
             command=self.toggle_adaptive,
         ).grid(row=5, column=0, sticky="w")
@@ -250,11 +250,18 @@ class AIHubDesktop:
         permission_row.grid_columnconfigure(1, weight=1)
         ttk.Label(permission_row, text="權限", style="PanelMuted.TLabel").grid(row=0, column=0, padx=(0, 7))
         self.permission_var = tk.StringVar(value="full" if self.app.full_access_unlocked() else "workspace")
-        permission = ttk.Combobox(
+        self.permission_combo = ttk.Combobox(
             permission_row, textvariable=self.permission_var,
-            values=("full", "workspace", "observe"), state="readonly", width=12,
+            values=(("full", "workspace", "observe") if self.app.full_access_unlocked() else ("workspace", "observe")),
+            state="readonly", width=12,
         )
-        permission.grid(row=0, column=1, sticky="ew")
+        self.permission_combo.grid(row=0, column=1, sticky="ew")
+        ttk.Button(permission_row, text="解鎖 Full / UAC", command=self.unlock_full_access).grid(
+            row=0, column=2, padx=(6, 0)
+        )
+        ttk.Button(permission_row, text="鎖定", command=self.lock_full_access).grid(
+            row=0, column=3, padx=(4, 0)
+        )
 
     def _build_workspace(self, parent: ttk.Frame) -> None:
         parent.grid_columnconfigure(0, weight=1)
@@ -2045,10 +2052,73 @@ class AIHubDesktop:
             self._show_error(error)
             return
         self._set_status(
-            "PERFORMANCE BOOST ARMED // AC + RAM >= 90%"
+            "PERFORMANCE BOOST ARMED // AC + RAM BELOW THRESHOLD; THROTTLE ON HIGH MEMORY"
             if self.adaptive_var.get()
             else "PERFORMANCE BOOST DISABLED"
         )
+
+    def unlock_full_access(self) -> None:
+        phrase = simpledialog.askstring(
+            "解鎖完整系統權限",
+            f"請輸入確認文字：{FULL_ACCESS_PHRASE}",
+            show="*",
+            parent=self.root,
+        )
+        if phrase is None:
+            return
+        if os.name == "nt":
+            try:
+                is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
+            except (AttributeError, OSError):
+                is_admin = False
+            if not is_admin:
+                script = (
+                    Path(sys.executable).resolve().parent / "start.ps1"
+                    if getattr(sys, "frozen", False)
+                    else Path(__file__).resolve().parent / "start.ps1"
+                )
+                if not script.is_file():
+                    self._show_error(PermissionError("找不到 start.ps1，無法啟動 UAC 完整權限工作階段。"))
+                    return
+                if messagebox.askyesno(
+                    "需要 UAC",
+                    "完整系統權限必須由 Windows UAC 核准。現在重新啟動 AI Hub 嗎？",
+                    parent=self.root,
+                ):
+                    subprocess.Popen(
+                        [
+                            "powershell.exe",
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(script),
+                            "-Elevate",
+                            "-MaxControl",
+                        ],
+                        cwd=str(script.parent),
+                    )
+                    self._set_status("已要求 UAC；目前工作階段將關閉。")
+                    self.root.after(100, self.close)
+                return
+        try:
+            self.app.unlock_full_access(phrase, minutes=30)
+        except Exception as error:
+            self._show_error(error)
+            return
+        self.permission_combo["values"] = ("full", "workspace", "observe")
+        self.permission_var.set("full")
+        self._set_status("FULL ACCESS UNLOCKED // 目前工作階段 30 分鐘")
+
+    def lock_full_access(self) -> None:
+        try:
+            self.app.lock_full_access()
+        except Exception as error:
+            self._show_error(error)
+            return
+        self.permission_combo["values"] = ("workspace", "observe")
+        self.permission_var.set("workspace")
+        self._set_status("FULL ACCESS LOCKED // 回到 workspace")
 
     def toggle_crawler(self) -> None:
         try:
