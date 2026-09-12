@@ -3,6 +3,7 @@ param(
     [switch]$Elevate,
     [switch]$MaxControl,
     [switch]$NoElevate,
+    [switch]$SafeMode,
     [switch]$PreferExe,
     [switch]$Web,
     [int]$Port = 8765,
@@ -23,6 +24,7 @@ if ($Elevate -and -not $isAdministrator) {
     $restartArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Elevate"
     if ($Source) { $restartArguments += ' -Source' }
     if ($MaxControl) { $restartArguments += ' -MaxControl' }
+    if ($SafeMode) { $restartArguments += ' -SafeMode' }
     Start-Process -FilePath 'powershell.exe' -ArgumentList $restartArguments -Verb RunAs
     exit 0
 }
@@ -48,6 +50,7 @@ try {
     $desktopExecutable = Join-Path $appRoot 'AIHub.exe'
     $arguments = @()
     if ($MaxControl) { $arguments += '--max-control' }
+    elseif ($SafeMode -or $NoElevate) { $arguments += '--safe-mode' }
 
     if (-not $Source -and (Test-Path -LiteralPath $desktopExecutable)) {
         & $desktopExecutable @arguments

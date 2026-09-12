@@ -39,9 +39,54 @@ SELECT_BG = "#EFF6FF"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="AI Hub native desktop control deck")
-    parser.add_argument("--max-control", action="store_true")
+    parser.add_argument(
+        "--max-control",
+        action="store_true",
+        help="明確要求 Full / MaxControl；一般桌面啟動也會採用此模式。",
+    )
+    parser.add_argument(
+        "--safe-mode",
+        action="store_true",
+        help="以 workspace 權限啟動，不要求 Windows UAC。",
+    )
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
+
+
+def _is_windows_admin() -> bool:
+    if os.name != "nt":
+        return True
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
+def _max_control_requested(args: argparse.Namespace) -> bool:
+    # Self-test stays non-interactive unless MaxControl was explicitly requested.
+    if getattr(args, "self_test", False):
+        return bool(getattr(args, "max_control", False))
+    return bool(
+        getattr(args, "max_control", False)
+        or not getattr(args, "safe_mode", False)
+    )
+
+
+def _relaunch_as_admin(root: Path) -> bool:
+    if os.name != "nt" or _is_windows_admin():
+        return False
+    executable = str(Path(sys.executable).resolve())
+    if getattr(sys, "frozen", False):
+        parameters = "--max-control"
+    else:
+        parameters = f'"{Path(__file__).resolve()}" --max-control'
+    try:
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", executable, parameters, str(root), 1
+        )
+    except (AttributeError, OSError):
+        return False
+    return int(result) > 32
 
 
 def local_time(value: str | None, seconds: bool = False) -> str:
@@ -160,6 +205,13 @@ class AIHubDesktop:
         style.configure("TProgressbar", troughcolor=PANEL_2, background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
         style.configure("TLabelframe", background=PANEL, foreground=CYAN, bordercolor=EDGE)
         style.configure("TLabelframe.Label", background=PANEL, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
+        style.configure(
+            "AccessBadge.TLabel",
+            background="#DCFCE7",
+            foreground="#166534",
+            padding=(8, 4),
+            font=("Cascadia Mono", 9, "bold"),
+        )
         apply_depth_styles(style)
         self.root.option_add("*TCombobox*Listbox.background", INPUT_BG)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
@@ -196,6 +248,12 @@ class AIHubDesktop:
         DepthMark(header).grid(row=0, column=0, rowspan=2, padx=(0, 12))
         ttk.Label(header, text="AI Hub", style="CardTitle.TLabel").grid(row=0, column=1, sticky="w")
         ttk.Label(header, text="選專案 → 選 AI → 開始工作", style="Card.TLabel").grid(row=1, column=1, sticky="w")
+        self.header_access = tk.StringVar(
+            value="FULL ACCESS" if self.app.full_access_unlocked() else "WORKSPACE"
+        )
+        ttk.Label(
+            header, textvariable=self.header_access, style="AccessBadge.TLabel"
+        ).grid(row=0, column=2, sticky="e", padx=(10, 10))
         ttk.Button(header, text="使用說明 · F1", command=self.show_quick_start).grid(row=0, column=3, sticky="e")
         self.header_state = tk.StringVar(value="正在檢查本機環境")
         ttk.Label(header, textvariable=self.header_state, style="Card.TLabel").grid(
@@ -307,8 +365,14 @@ class AIHubDesktop:
         body = ttk.Frame(window, padding=20)
         body.pack(fill=tk.BOTH, expand=True)
         ttk.Label(body, text="三步開始第一個工作", style="Title.TLabel").pack(anchor="w")
+        access_label = (
+            "Full / MaxControl（本次啟動已開啟）"
+            if self.app.full_access_unlocked()
+            else "workspace（可隨時解鎖 Full）"
+        )
         ttk.Label(
-            body, text="不需要先下載大型模型，也不需要解鎖 Full。",
+            body,
+            text=f"目前權限：{access_label}。不需要先下載大型模型。",
             wraplength=550,
         ).pack(anchor="w", pady=(8, 16))
 
@@ -331,8 +395,8 @@ class AIHubDesktop:
             ttk.Label(body, text=detail, wraplength=550).pack(anchor="w", pady=(0, 8))
         ttk.Label(
             body,
-            text="權限：observe＝只讀；workspace＝專案內工作；Full＝進階系統操作。\n"
-                 "下載、覆寫與帳號操作仍需個別核准。\n\n"
+            text="權限：observe＝只讀；workspace＝專案內工作；Full＝進階系統操作。一般啟動預設為 Full / MaxControl。\n"
+                 "下載、覆寫與帳號操作仍需個別核准；要降低權限可用 --safe-mode。\n\n"
                  "快捷鍵：F1 使用說明 · F5 重新檢查 · Ctrl+K 搜尋 · Ctrl+N 新對話",
             wraplength=550,
         ).pack(anchor="w", pady=12)
@@ -2237,10 +2301,18 @@ class AIHubDesktop:
             admin = bool(ctypes.windll.shell32.IsUserAnAdmin()) if os.name == "nt" else False
         except OSError:
             admin = False
+        unsafe_cli = bool(self.app.settings.get("unsafe_full_cli", False)) or os.environ.get(
+            "AI_HUB_UNSAFE_FULL_CLI"
+        ) == "1"
         access = (
             "MAX-CLI"
-            if self.app.full_access_unlocked() and os.environ.get("AI_HUB_UNSAFE_FULL_CLI") == "1"
+            if self.app.full_access_unlocked() and unsafe_cli
             else ("FULL" if self.app.full_access_unlocked() else "WORKSPACE")
+        )
+        self.header_access.set(
+            "MAX CONTROL"
+            if access == "MAX-CLI"
+            else ("FULL ACCESS" if access == "FULL" else "WORKSPACE")
         )
         boost = "BOOST" if snapshot.get("performance_boost_active") else "NORMAL"
         self.header_state.set(
@@ -2299,6 +2371,7 @@ class AIHubDesktop:
 
 def main() -> int:
     args = parse_args()
+    max_control = _max_control_requested(args)
     if os.name == "nt":
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -2313,9 +2386,22 @@ def main() -> int:
         if getattr(sys, "frozen", False)
         else Path(__file__).resolve().parent
     )
+    if max_control and os.name == "nt" and not _is_windows_admin():
+        if _relaunch_as_admin(root):
+            return 0
+        print(
+            "AI Hub 需要 Windows 系統管理員權限才能啟用 Full / MaxControl；"
+            "若要略過 UAC，請使用 --safe-mode。",
+            file=sys.stderr,
+        )
+        return 1
+
     app = AIHubApplication(root)
+    if args.safe_mode and not args.max_control:
+        app.lock_full_access()
+        app.update_settings({"permission_mode": "workspace", "unsafe_full_cli": False})
     if args.self_test:
-        if args.max_control:
+        if max_control:
             app.unlock_full_access(FULL_ACCESS_PHRASE, 240)
         payload = {
             "native_ui": "tkinter",
@@ -2329,7 +2415,7 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False))
         app.stop()
         return 0
-    AIHubDesktop(app, max_control=args.max_control).run()
+    AIHubDesktop(app, max_control=max_control).run()
     return 0
 
 

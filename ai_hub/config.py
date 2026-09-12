@@ -22,6 +22,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "max_parallel_agents": 3,
     "auto_peer_review": True,
     "unsafe_full_cli": False,
+    "quick_start_seen": False,
     "allow_private_research": False,
     "maintenance_enabled": True,
     "provider_config": {

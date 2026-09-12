@@ -25,7 +25,7 @@ GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；�
 ## 第一次使用
 
 1. 下載並解壓 `AIHub-Windows.zip` 到可寫入的本機資料夾。
-2. 可先直接執行 `AIHub.exe` 使用本機桌面介面。
+2. 直接執行 `AIHub.exe` 使用本機桌面介面；一般啟動會自動進入 Full / MaxControl，Windows 可能顯示 UAC。
 3. 要使用 Codex CLI / Gemini CLI 時，在 PowerShell 執行：
 
 ```powershell
@@ -54,13 +54,15 @@ GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；�
 .\start.ps1 -Source
 ```
 
-需要明確提升 Windows 權限時才使用：
+一般啟動預設會進入 Full / MaxControl；Windows 會依需要顯示 UAC。若要以較低權限啟動：
 
 ```powershell
-.\start.ps1 -Elevate
+.\start.ps1 -SafeMode
+# 或
+.\AIHub.exe --safe-mode
 ```
 
-需要同時解鎖 AI Hub Full 模式時可再加 `-MaxControl`。一般啟動不會自動要求系統管理員權限。
+`-MaxControl` 仍可明確指定完整模式；`-Elevate` 可用於先手動提升 PowerShell。下載、覆寫與帳號操作仍會各自要求核准。
 
 ## 主要能力
 
@@ -132,6 +134,6 @@ AI Hub 會在執行檔旁建立或使用：
 
 ## 使用提示
 
-啟動時會顯示三步使用導覽；任何時候按 F1 可重新開啟。先選專案、連接一個 AI，再輸入工作。一般工作使用 workspace，不需要 Full。F5 重新檢查連線，Ctrl+K 搜尋，Ctrl+Enter 送出。訓練需要先獨立下載本地權重。
+啟動時會顯示三步使用導覽；任何時候按 F1 可重新開啟。預設已啟用 Full / MaxControl，先選專案、連接一個 AI，再輸入工作即可。若需要較低權限可用 `--safe-mode`。F5 重新檢查連線，Ctrl+K 搜尋，Ctrl+Enter 送出。訓練需要先獨立下載本地權重。
 
 main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.0 Release 不會因 main 更新而自動替換。
