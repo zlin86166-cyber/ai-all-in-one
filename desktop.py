@@ -2066,6 +2066,9 @@ class AIHubDesktop:
         )
         if phrase is None:
             return
+        if phrase.strip() != FULL_ACCESS_PHRASE:
+            self._show_error(PermissionError("確認文字不正確。"))
+            return
         if os.name == "nt":
             try:
                 is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
