@@ -19,9 +19,10 @@ from tkinter.scrolledtext import ScrolledText
 
 from ai_hub.application import AIHubApplication, ApprovalRequired
 from ai_hub.security import FULL_ACCESS_PHRASE
+from ai_hub.ui_depth import DepthCard, DepthMark, apply_depth_styles
 
 
-BG = "#FFFFFF"
+BG = "#EDF2FA"
 PANEL = "#FFFFFF"
 PANEL_2 = "#F8FAFC"
 EDGE = "#E2E8F0"
@@ -159,6 +160,7 @@ class AIHubDesktop:
         style.configure("TProgressbar", troughcolor=PANEL_2, background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
         style.configure("TLabelframe", background=PANEL, foreground=CYAN, bordercolor=EDGE)
         style.configure("TLabelframe.Label", background=PANEL, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
+        apply_depth_styles(style)
         self.root.option_add("*TCombobox*Listbox.background", INPUT_BG)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
         self.root.option_add("*TCombobox*Listbox.selectBackground", SELECT_BG)
@@ -187,17 +189,17 @@ class AIHubDesktop:
         status.grid(row=2, column=0, sticky="ew")
 
     def _build_header(self) -> None:
-        header = ttk.Frame(self.root, padding=(18, 12, 16, 10))
-        header.grid(row=0, column=0, sticky="ew")
-        header.grid_columnconfigure(1, weight=1)
-        ttk.Label(header, text="AI Hub", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            header, text="本機多模型 AI 工作台  ·  原生 Windows 應用程式",
-            style="HeaderMuted.TLabel", font=("Microsoft JhengHei UI", 9),
-        ).grid(row=1, column=0, sticky="w")
-        self.header_state = tk.StringVar(value="安全工作階段")
-        ttk.Label(header, textvariable=self.header_state, style="HeaderMetric.TLabel").grid(
-            row=0, column=1, rowspan=2, sticky="e", padx=(20, 0)
+        card = DepthCard(self.root, padding=(16, 10))
+        card.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 8))
+        header = card.content
+        header.grid_columnconfigure(2, weight=1)
+        DepthMark(header).grid(row=0, column=0, rowspan=2, padx=(0, 12))
+        ttk.Label(header, text="AI Hub", style="CardTitle.TLabel").grid(row=0, column=1, sticky="w")
+        ttk.Label(header, text="選專案 → 選 AI → 開始工作", style="Card.TLabel").grid(row=1, column=1, sticky="w")
+        ttk.Button(header, text="使用說明 · F1", command=self.show_quick_start).grid(row=0, column=3, sticky="e")
+        self.header_state = tk.StringVar(value="正在檢查本機環境")
+        ttk.Label(header, textvariable=self.header_state, style="Card.TLabel").grid(
+            row=2, column=0, columnspan=4, sticky="w", pady=(4, 0)
         )
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
@@ -222,7 +224,7 @@ class AIHubDesktop:
         self.conversation_tree.column("#0", width=246, stretch=True)
         self.conversation_tree.bind("<<TreeviewSelect>>", self._select_conversation)
 
-        options = ttk.LabelFrame(parent, text="執行設定", style="TLabelframe", padding=8)
+        options = ttk.LabelFrame(parent, text="選擇 AI", style="TLabelframe", padding=8)
         options.grid(row=4, column=0, sticky="ew", padx=10, pady=10)
         options.grid_columnconfigure(0, weight=1)
         self.provider_frame = ttk.Frame(options, style="Panel.TFrame")
@@ -232,22 +234,28 @@ class AIHubDesktop:
         self.crawler_var = tk.BooleanVar(value=bool(self.app.settings.get("crawler_enabled", True)))
         self.review_var = tk.BooleanVar(value=bool(self.app.settings.get("auto_peer_review", True)))
         self.adaptive_var = tk.BooleanVar(value=bool(self.app.settings.get("adaptive_performance", False)))
-        ttk.Checkbutton(options, text="多 Agent 協作編排", variable=self.collaboration_var).grid(row=1, column=0, sticky="w")
-        ttk.Checkbutton(options, text="保留上網 / 搜尋", variable=self.web_var).grid(row=2, column=0, sticky="w")
-        ttk.Checkbutton(options, text="AI 交叉監控與審查", variable=self.review_var).grid(row=3, column=0, sticky="w")
+        self.advanced_settings = ttk.Frame(options, style="Panel.TFrame")
+        self.advanced_settings.grid(row=2, column=0, sticky="ew")
+        self.advanced_settings.grid_columnconfigure(0, weight=1)
+        self.advanced_button = ttk.Button(options, text="進階設定 ▸", command=self.toggle_advanced_settings)
+        self.advanced_button.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        self.advanced_settings.grid_remove()
+        ttk.Checkbutton(self.advanced_settings, text="多 AI 協作（需選兩個以上）", variable=self.collaboration_var).grid(row=1, column=0, sticky="w")
+        ttk.Checkbutton(self.advanced_settings, text="保留上網 / 搜尋", variable=self.web_var).grid(row=2, column=0, sticky="w")
+        ttk.Checkbutton(self.advanced_settings, text="AI 交叉監控與審查", variable=self.review_var).grid(row=3, column=0, sticky="w")
         ttk.Checkbutton(
-            options,
+            self.advanced_settings,
             text="本機模型自動研究網址",
             variable=self.crawler_var,
             command=self.toggle_crawler,
         ).grid(row=4, column=0, sticky="w")
         ttk.Checkbutton(
-            options,
+            self.advanced_settings,
             text="負載加速（AC + 記憶體低於門檻時）",
             variable=self.adaptive_var,
             command=self.toggle_adaptive,
         ).grid(row=5, column=0, sticky="w")
-        permission_row = ttk.Frame(options, style="Panel.TFrame")
+        permission_row = ttk.Frame(self.advanced_settings, style="Panel.TFrame")
         permission_row.grid(row=6, column=0, sticky="ew", pady=(5, 0))
         permission_row.grid_columnconfigure(1, weight=1)
         ttk.Label(permission_row, text="權限", style="PanelMuted.TLabel").grid(row=0, column=0, padx=(0, 7))
@@ -264,6 +272,25 @@ class AIHubDesktop:
         ttk.Button(permission_row, text="鎖定", command=self.lock_full_access).grid(
             row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0)
         )
+
+    def toggle_advanced_settings(self) -> None:
+        if self.advanced_settings.winfo_ismapped():
+            self.advanced_settings.grid_remove()
+            self.advanced_button.configure(text="進階設定 ▸")
+        else:
+            self.advanced_settings.grid()
+            self.advanced_button.configure(text="收起進階設定 ▾")
+
+    def use_prompt_template(self, text: str) -> None:
+        current = self.prompt_text.get("1.0", tk.END).strip()
+        if current and not messagebox.askyesno(
+            "替換草稿", "輸入框已有內容，要以範本替換嗎？", parent=self.root
+        ):
+            return
+        self.prompt_text.delete("1.0", tk.END)
+        self.prompt_text.insert("1.0", text)
+        self.prompt_text.focus_set()
+        self._set_status("範本已填入；請修改需求，再按開始。")
 
     def show_quick_start(self) -> None:
         existing = getattr(self, "_quick_start_window", None)
@@ -369,8 +396,9 @@ class AIHubDesktop:
         self.chat_text.tag_configure("system_header", foreground=WARN, font=("Cascadia Mono", 9, "bold"), spacing1=10)
         self.chat_text.tag_configure("body", foreground=TEXT, lmargin1=8, lmargin2=8, spacing3=7)
 
-        composer = ttk.Frame(tab, style="Panel2.TFrame", padding=10)
-        composer.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 10))
+        composer_card = DepthCard(tab, padding=12)
+        composer_card.grid(row=2, column=0, sticky="ew", padx=10, pady=(10, 12))
+        composer = composer_card.content
         composer.grid_columnconfigure(0, weight=1)
         self.context_var = tk.StringVar(value="尚未選取檔案範圍")
         ttk.Label(composer, textvariable=self.context_var, style="Muted.TLabel", font=("Cascadia Mono", 8)).grid(row=0, column=0, sticky="w", pady=(0, 4))
@@ -386,6 +414,16 @@ class AIHubDesktop:
         ttk.Button(action, text="開始  Ctrl+Enter", style="Green.TButton", command=self.send_prompt).pack(fill=tk.X)
         ttk.Button(action, text="停止", style="Danger.TButton", command=self.stop_latest_task).pack(fill=tk.X, pady=(6, 0))
         self.prompt_text.bind("<Control-Return>", lambda _event: self.send_prompt() or "break")
+        templates = ttk.Frame(composer, style="Card.TFrame")
+        templates.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        for label, prompt in (
+            ("了解專案", "請先唯讀檢查目前專案，說明用途、啟動方法與需要注意的地方。不要修改檔案。"),
+            ("檢查問題", "請先檢查目前專案，找出可重現的問題與改善建議，附上證據；這一輪先不要修改。"),
+            ("開始實作", "我想完成：［請填入需求］。請檢查現有程式，完成修改並驗證結果。"),
+        ):
+            ttk.Button(templates, text=label, command=lambda value=prompt: self.use_prompt_template(value)).pack(
+                side=tk.LEFT, padx=(0, 8))
+
 
     def _build_agents_tab(self) -> None:
         tab = self.agents_tab
