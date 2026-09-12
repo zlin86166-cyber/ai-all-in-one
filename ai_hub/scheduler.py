@@ -30,11 +30,10 @@ class Scheduler:
 
     @staticmethod
     def _weekday_in_window(now: datetime, weekdays: set[int], start: str, end: str) -> bool:
-        if now.weekday() in weekdays:
-            return True
+        day = now.weekday()
         if start > end and now.strftime("%H:%M") <= end:
-            return (now.weekday() - 1) % 7 in weekdays
-        return False
+            day = (day - 1) % 7
+        return day in weekdays
 
     @staticmethod
     def _elapsed_since(now: datetime, value: str) -> float | None:

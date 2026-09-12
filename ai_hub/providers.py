@@ -276,7 +276,7 @@ class CodexProvider(BaseProvider):
         ])
         if context.permission_mode == "observe":
             arguments.extend(["--sandbox", "read-only"])
-        elif context.permission_mode in {"workspace", "full"} and not unsafe_full:
+        elif context.permission_mode in {"workspace", "full"}:
             arguments.extend(["--sandbox", "workspace-write"])
         arguments.append("-")
         session_id: str | None = None

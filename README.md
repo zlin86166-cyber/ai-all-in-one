@@ -129,3 +129,9 @@ AI Hub 會在執行檔旁建立或使用：
 - `training/`：QLoRA 工具。
 
 完整規格見 `docs/MASTER_PROMPT.md`，需求覆蓋檢查見 `docs/PROMPT_COVERAGE.md`。
+
+## 使用提示
+
+啟動時會顯示三步使用導覽；任何時候按 F1 可重新開啟。先選專案、連接一個 AI，再輸入工作。一般工作使用 workspace，不需要 Full。F5 重新檢查連線，Ctrl+K 搜尋，Ctrl+Enter 送出。訓練需要先獨立下載本地權重。
+
+main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.0 Release 不會因 main 更新而自動替換。

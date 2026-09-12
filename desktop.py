@@ -114,6 +114,8 @@ class AIHubDesktop:
         self._build_shell()
         self._bind_shortcuts()
         self._load_initial_state()
+        if not self.app.settings.get("quick_start_seen", False):
+            self.root.after(800, self.show_quick_start)
         self.root.after(500, self._refresh_loop)
 
     def _configure_styles(self) -> None:
@@ -257,11 +259,57 @@ class AIHubDesktop:
         )
         self.permission_combo.grid(row=0, column=1, sticky="ew")
         ttk.Button(permission_row, text="解鎖 Full / UAC", command=self.unlock_full_access).grid(
-            row=0, column=2, padx=(6, 0)
+            row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0)
         )
         ttk.Button(permission_row, text="鎖定", command=self.lock_full_access).grid(
-            row=0, column=3, padx=(4, 0)
+            row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0)
         )
+
+    def show_quick_start(self) -> None:
+        existing = getattr(self, "_quick_start_window", None)
+        if existing is not None and existing.winfo_exists():
+            existing.lift()
+            return
+        window = tk.Toplevel(self.root)
+        self._quick_start_window = window
+        window.title("AI Hub · 開始使用")
+        window.geometry("620x520")
+        window.minsize(520, 460)
+        window.transient(self.root)
+        self.app.settings.update({"quick_start_seen": True})
+        body = ttk.Frame(window, padding=20)
+        body.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(body, text="三步開始第一個工作", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(
+            body, text="不需要先下載大型模型，也不需要解鎖 Full。",
+            wraplength=550,
+        ).pack(anchor="w", pady=(8, 16))
+
+        def navigate(tab=None, action=None):
+            window.destroy()
+            if tab is not None:
+                self.tabs.select(tab)
+            if action is not None:
+                action()
+
+        for title, detail, action in (
+            ("1 · 選擇專案", "選擇 AI 可以處理的資料夾；檔案修改預設限制在這裡。",
+             lambda: navigate(action=self.add_project)),
+            ("2 · 連接一個 AI", "在整合頁安裝 CLI、登入或設定相容端點；完成後按 F5。",
+             lambda: navigate(self.integrations_tab)),
+            ("3 · 輸入工作", "左側勾選已就緒 AI，輸入需求後按 Ctrl+Enter。",
+             lambda: navigate(self.chat_tab)),
+        ):
+            ttk.Button(body, text=title, command=action).pack(fill=tk.X, pady=(5, 3))
+            ttk.Label(body, text=detail, wraplength=550).pack(anchor="w", pady=(0, 8))
+        ttk.Label(
+            body,
+            text="權限：observe＝只讀；workspace＝專案內工作；Full＝進階系統操作。\n"
+                 "下載、覆寫與帳號操作仍需個別核准。\n\n"
+                 "快捷鍵：F1 使用說明 · F5 重新檢查 · Ctrl+K 搜尋 · Ctrl+N 新對話",
+            wraplength=550,
+        ).pack(anchor="w", pady=12)
+        ttk.Button(body, text="開始使用", command=window.destroy).pack(anchor="e")
 
     def _build_workspace(self, parent: ttk.Frame) -> None:
         parent.grid_columnconfigure(0, weight=1)
@@ -734,6 +782,7 @@ class AIHubDesktop:
         self.root.bind("<Control-n>", lambda _event: self.new_conversation())
         self.root.bind("<Control-k>", self._focus_search)
         self.root.bind("<F5>", lambda _event: self.force_refresh())
+        self.root.bind("<F1>", lambda _event: self.show_quick_start())
 
     def _focus_search(self, _event: tk.Event | None = None) -> str:
         self.tabs.select(self.database_tab)
@@ -964,7 +1013,8 @@ class AIHubDesktop:
             return
         providers = self._selected_provider_ids()
         if not providers:
-            messagebox.showwarning("AI Hub", "請先選擇至少一個已登入或已就緒的 AI。", parent=self.root)
+            messagebox.showwarning("尚未選擇可用 AI", "請在左側勾選已就緒的 AI。若全部為灰色，請到「整合」安裝 CLI、登入或設定端點，再按 F5 重新檢查。", parent=self.root)
+            self.tabs.select(self.integrations_tab)
             return
         if not self.current_project_id or not self.current_conversation_id:
             return
@@ -985,7 +1035,8 @@ class AIHubDesktop:
             return self.app.run_prompt({**payload, "approval_id": approval_id})
 
         def done(result: dict[str, Any]) -> None:
-            self.prompt_text.delete("1.0", tk.END)
+            if self.prompt_text.get("1.0", tk.END).strip() == prompt:
+                self.prompt_text.delete("1.0", tk.END)
             self._show_feasibility(result.get("feasibility") or {})
             self.message_signature = None
             self.task_signature = None
