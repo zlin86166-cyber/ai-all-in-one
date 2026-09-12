@@ -1,6 +1,6 @@
 # AI Hub requirement coverage
 
-Updated: 2026-09-06
+Updated: 2026-09-12
 
 Status meanings: `DONE` = executable implementation exists; `MEASURE` = implementation exists but the requested superiority/result depends on real benchmark data; `PLATFORM` = implementation is limited by an external platform capability and must not be misrepresented.
 
@@ -64,5 +64,6 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 - Integrations: Google Play, Google Sites browser-assisted session and model sync have bundled frozen helpers.
 - Training: revision pinning, deterministic seed, assistant-only loss, validation/eval loss, early stopping, resume, training curve, smoke test, optional merged export.
 - Production engineering: runtime data git hygiene, retention/backups, cross-platform CI, Windows executable and packaged release build.
+- Hardening follow-up: the versioned local API entry point is restored; compatibility API traffic is loopback-only with a session cookie and same-origin check; Full mode has a visible phrase + UAC path; cancelled/child tasks are not independently replayed after restart; QLoRA requires previously verified local Hugging Face weights and never silently downloads during training.
 
 Platform limits remain explicit: Modern Google Sites has no supported generic modern Sites write API; external-account flows need real user credentials/OAuth; real QLoRA execution requires compatible NVIDIA CUDA hardware; selected-file enforcement is rollback/snapshot based rather than a Windows kernel sandbox.
