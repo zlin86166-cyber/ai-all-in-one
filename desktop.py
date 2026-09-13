@@ -361,7 +361,7 @@ class AIHubDesktop:
         window.geometry("620x520")
         window.minsize(520, 460)
         window.transient(self.root)
-        self.app.settings.update({"quick_start_seen": True})
+        self.app.update_settings({"quick_start_seen": True})
         body = ttk.Frame(window, padding=20)
         body.pack(fill=tk.BOTH, expand=True)
         ttk.Label(body, text="三步開始第一個工作", style="Title.TLabel").pack(anchor="w")

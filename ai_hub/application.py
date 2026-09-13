@@ -201,6 +201,7 @@ class AIHubApplication:
             "crawler_allowlist", "adaptive_performance", "performance_memory_threshold",
             "max_parallel_agents", "auto_peer_review", "provider_config",
             "allow_private_research", "maintenance_enabled", "unsafe_full_cli",
+            "quick_start_seen",
         }
         clean = {key: value for key, value in values.items() if key in allowed}
         if "max_parallel_agents" in clean:

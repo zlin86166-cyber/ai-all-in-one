@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 from argparse import Namespace
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from ai_hub.application import AIHubApplication
+from ai_hub.config import Settings
 from desktop import _max_control_requested
 
 
@@ -26,6 +30,15 @@ class PermissionModeTests(unittest.TestCase):
         self.assertTrue(_max_control_requested(Namespace(
             max_control=True, safe_mode=True, self_test=False
         )))
+
+    def test_quick_start_seen_is_persisted(self):
+        with TemporaryDirectory() as tmp:
+            app = AIHubApplication(Path(tmp))
+            try:
+                app.update_settings({"quick_start_seen": True})
+                self.assertTrue(Settings(app.paths.settings).get("quick_start_seen"))
+            finally:
+                app.stop()
 
 
 if __name__ == "__main__":
