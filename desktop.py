@@ -1050,6 +1050,8 @@ class AIHubDesktop:
 
     def new_conversation(self) -> None:
         if not self.current_project_id:
+            self._set_status("請先選擇或新增專案，再建立對話。")
+            self.project_combo.focus_set()
             return
         try:
             conversation = self.app.create_conversation(self.current_project_id)
@@ -1111,6 +1113,7 @@ class AIHubDesktop:
     def send_prompt(self) -> None:
         prompt = self.prompt_text.get("1.0", tk.END).strip()
         if not prompt:
+            self._set_status("請先輸入工作內容，再按開始。")
             self.prompt_text.focus_set()
             return
         providers = self._selected_provider_ids()
@@ -1119,6 +1122,8 @@ class AIHubDesktop:
             self.tabs.select(self.integrations_tab)
             return
         if not self.current_project_id or not self.current_conversation_id:
+            self._set_status("請先選擇專案與對話，再開始工作。")
+            self.project_combo.focus_set()
             return
         payload = {
             "prompt": prompt,
