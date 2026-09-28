@@ -343,10 +343,15 @@ function renderConversations() {
   const list = $("#conversation-list");
   const conversations = (state.data.conversations || []).filter((item) => item.project_id === state.projectId);
   list.innerHTML = conversations.length ? conversations.map((conversation) => `
-    <button class="conversation-item ${conversation.id === state.conversationId ? "active" : ""}" data-conversation-id="${escapeHtml(conversation.id)}" title="${escapeHtml(conversation.title)}">
-      <svg viewBox="0 0 24 24"><path d="M20 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4v8Z"/></svg>
-      <span>${escapeHtml(conversation.title)}</span>
-    </button>`).join("") : `<div class="empty-list" style="padding:18px 8px">尚無對話</div>`;
+    <div class="conversation-row">
+      <button class="conversation-item ${conversation.id === state.conversationId ? "active" : ""}" data-conversation-id="${escapeHtml(conversation.id)}" title="${escapeHtml(conversation.title)}">
+        <svg viewBox="0 0 24 24"><path d="M20 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4v8Z"/></svg>
+        <span>${escapeHtml(conversation.title)}</span>
+      </button>
+      <button class="conversation-delete" data-delete-conversation-id="${escapeHtml(conversation.id)}" title="刪除對話" aria-label="刪除對話：${escapeHtml(conversation.title)}">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 14h11l1-14M9 7V4h6v3"/></svg>
+      </button>
+    </div>`).join("") : `<div class="empty-list" style="padding:18px 8px">尚無對話</div>`;
   $$(".conversation-item", list).forEach((button) => button.addEventListener("click", async () => {
     state.conversationId = button.dataset.conversationId;
     localStorage.setItem("aihub.conversation", state.conversationId);
@@ -354,6 +359,45 @@ function renderConversations() {
     renderConversations();
     switchView("chat");
   }));
+  $$(".conversation-delete", list).forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteConversation(button.dataset.deleteConversationId);
+  }));
+}
+
+async function deleteConversation(conversationId) {
+  const conversation = state.data.conversations.find((item) => item.id === conversationId);
+  if (!conversation) return;
+  const message = `確定永久刪除「${conversation.title}」及其所有訊息嗎？此動作無法復原。\n\n` +
+    "已啟動的工作會繼續執行，工作紀錄保留；完成結果不會再寫回這個對話。";
+  if (!window.confirm(message)) return;
+
+  try {
+    await api(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
+    state.data.conversations = state.data.conversations.filter((item) => item.id !== conversationId);
+    if (state.conversationId !== conversationId) {
+      renderConversations();
+      toast(`已刪除「${conversation.title}」`);
+      return;
+    }
+
+    const nextConversation = state.data.conversations.find((item) => item.project_id === state.projectId);
+    state.conversationId = nextConversation?.id || null;
+    state.conversation = null;
+    state.messages = [];
+    state.tasks = [];
+    state.feasibility = null;
+    localStorage.setItem("aihub.conversation", state.conversationId || "");
+    if (nextConversation) {
+      await loadConversation(false);
+      renderAll();
+    } else {
+      await createNewChat();
+    }
+    toast(`已刪除「${conversation.title}」`);
+  } catch (error) {
+    toast(error.message, "error");
+  }
 }
 
 function renderConversation() {

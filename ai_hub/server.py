@@ -362,6 +362,21 @@ class AIHubHandler(BaseHTTPRequestHandler):
         except Exception as error:
             self._handle_error(error)
 
+    def do_DELETE(self) -> None:
+        try:
+            path, _query = self._route()
+            if path.startswith("/api/") and path != "/api/health":
+                self._require_api_session()
+            match = re.fullmatch(r"/api/conversations/([^/]+)", path)
+            if match:
+                if not self.application.delete_conversation(match.group(1)):
+                    raise APIError(404, "找不到對話。")
+                self._send_json({"deleted": True})
+                return
+            raise APIError(404, "找不到 API。")
+        except Exception as error:
+            self._handle_error(error)
+
     def _serve_static(self, request_path: str) -> None:
         relative = "index.html" if request_path in {"", "/"} else urllib.parse.unquote(request_path.lstrip("/"))
         target = (self.application.paths.web / relative).resolve()

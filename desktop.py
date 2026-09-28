@@ -277,6 +277,7 @@ class AIHubDesktop:
         chat_bar.grid_columnconfigure(0, weight=1)
         ttk.Label(chat_bar, text="歷史對話", style="PanelMuted.TLabel", font=("Microsoft JhengHei UI", 10, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Button(chat_bar, text="新增", command=self.new_conversation).grid(row=0, column=1)
+        ttk.Button(chat_bar, text="刪除", command=self.delete_current_conversation).grid(row=0, column=2, padx=(5, 0))
         self.conversation_tree = ttk.Treeview(parent, show="tree", selectmode="browse")
         self.conversation_tree.grid(row=3, column=0, sticky="nsew", padx=10)
         self.conversation_tree.column("#0", width=246, stretch=True)
@@ -1042,6 +1043,46 @@ class AIHubDesktop:
         self.message_signature = None
         self.refresh_messages()
         self._set_status(f"CHAT // {conversation['title']}")
+
+    def delete_current_conversation(self) -> None:
+        conversation_id = self.current_conversation_id
+        conversation = self.app.database.get_conversation(conversation_id or "")
+        if not conversation:
+            messagebox.showinfo("AI Hub", "請先選取要刪除的對話。", parent=self.root)
+            return
+
+        active_tasks = self.app.database.list_tasks(
+            conversation_id=conversation_id, active_only=True, limit=20
+        )
+        task_note = (
+            "\n\n已啟動的工作會繼續執行，工作紀錄會保留；完成結果不會再寫回這個對話。"
+            if active_tasks
+            else ""
+        )
+        if not messagebox.askyesno(
+            "永久刪除對話",
+            f"確定永久刪除「{conversation['title']}」及其所有訊息嗎？\n"
+            f"此動作無法復原。{task_note}",
+            icon="warning",
+            parent=self.root,
+        ):
+            return
+
+        try:
+            if not self.app.delete_conversation(conversation_id):
+                messagebox.showwarning("AI Hub", "這個對話已不存在。", parent=self.root)
+                return
+        except Exception as error:
+            self._show_error(error)
+            return
+
+        self.current_conversation_id = None
+        self.message_signature = None
+        self.task_signature = None
+        self._reload_conversations()
+        if self.current_conversation_id:
+            self._set_current_conversation(self.current_conversation_id)
+        self._set_status(f"CHAT // 已刪除「{conversation['title']}」")
 
     def new_conversation(self) -> None:
         if not self.current_project_id:

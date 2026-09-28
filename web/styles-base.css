@@ -59,11 +59,16 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .nav-badge { margin-left: auto; min-width: 19px; padding: 2px 6px; border-radius: 20px; color: white; background: var(--ink); font-size: 10px; text-align: center; }
 .sidebar-section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 7px 8px 11px; color: var(--subtle); font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
 .conversation-list { min-height: 80px; flex: 1; overflow-y: auto; scrollbar-width: thin; }
-.conversation-item { position: relative; display: flex; align-items: center; gap: 9px; width: 100%; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; color: #505661; background: transparent; cursor: pointer; font-size: 12.5px; text-align: left; }
+.conversation-row { display: flex; align-items: center; gap: 2px; padding-right: 2px; }
+.conversation-item { position: relative; display: flex; flex: 1; align-items: center; gap: 9px; min-width: 0; width: auto; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; color: #505661; background: transparent; cursor: pointer; font-size: 12.5px; text-align: left; }
 .conversation-item:hover { color: var(--text); background: #eceef1; }
 .conversation-item.active { color: var(--ink); background: var(--surface); box-shadow: 0 1px 4px rgba(20, 25, 35, .06); font-weight: 610; }
 .conversation-item svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .conversation-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-delete { display: grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; color: var(--subtle); background: transparent; cursor: pointer; opacity: .58; }
+.conversation-delete svg { width: 14px; height: 14px; }
+.conversation-row:hover .conversation-delete, .conversation-row:focus-within .conversation-delete { opacity: 1; }
+.conversation-delete:hover, .conversation-delete:focus-visible { color: var(--red); background: var(--red-soft); opacity: 1; }
 .sidebar-footer { padding-top: 10px; border-top: 1px solid var(--line); }
 .profile-row { display: flex; align-items: center; width: 100%; padding: 7px; border: 0; border-radius: 10px; background: transparent; cursor: pointer; text-align: left; }
 .profile-row:hover { background: #eceef1; }

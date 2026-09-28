@@ -236,6 +236,17 @@ class AIHubApplication:
         project = self.get_project(project_id)
         return self.database.create_conversation(project["id"], title)
 
+    def delete_conversation(self, conversation_id: str) -> bool:
+        conversation = self.database.get_conversation(conversation_id)
+        deleted = self.database.delete_conversation(conversation_id)
+        if deleted:
+            self.database.audit(
+                "conversation.deleted",
+                conversation_id,
+                {"project_id": conversation.get("project_id") if conversation else None},
+            )
+        return deleted
+
     def _provider_status_for(self, provider_ids: list[str]) -> dict[str, dict[str, Any]]:
         statuses = self.providers.status_map()
         missing = [provider_id for provider_id in provider_ids if provider_id not in statuses]
@@ -316,6 +327,8 @@ class AIHubApplication:
             prompt,
             metadata={"selected_files": selected_files, "feasibility": feasibility},
         )
+        if not message:
+            raise ValueError("這個對話已被刪除，請先建立新對話再送出訊息。")
         file_context = ""
         if selected_files:
             context_parts = [

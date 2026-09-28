@@ -1,5 +1,5 @@
 const DOWNLOAD_URL =
-  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.1/AIHub-Windows.zip';
+  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.2/AIHub-Windows.zip';
 const REPOSITORY_URL = 'https://github.com/zlin86166-cyber/ai-all-in-one';
 
 const features = [
@@ -22,7 +22,7 @@ export default function Home() {
         <div className="navMeta">
           <span className="statusDot" />
           <span>Windows release</span>
-          <span className="version">v0.2.1</span>
+          <span className="version">v0.2.2</span>
         </div>
       </nav>
 
@@ -133,8 +133,8 @@ export default function Home() {
         <div className="shell footerInner">
           <div><strong>AI Hub</strong><p>Native multi-model operator for Windows.</p></div>
           <div className="footerLinks">
-            <a href={DOWNLOAD_URL}>下載 v0.2.1</a>
-            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.1`} target="_blank" rel="noreferrer">Release notes</a>
+            <a href={DOWNLOAD_URL}>下載 v0.2.2</a>
+            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.2`} target="_blank" rel="noreferrer">Release notes</a>
             <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
           </div>
         </div>

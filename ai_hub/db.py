@@ -478,6 +478,77 @@ class Database:
         )
         return [self._decode(row) or {} for row in rows]
 
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a chat and its messages while retaining detached task history."""
+        with self._write_lock, self._session() as connection:
+            conversation = connection.execute(
+                "SELECT id FROM conversations WHERE id = ?", (conversation_id,)
+            ).fetchone()
+            if not conversation:
+                return False
+
+            related_tasks = connection.execute(
+                "SELECT id, metadata_json FROM tasks WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchall()
+            for task in related_tasks:
+                try:
+                    metadata = json.loads(task["metadata_json"] or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(metadata, dict):
+                    continue
+                resume_payload = metadata.get("resume_payload")
+                if isinstance(resume_payload, dict):
+                    resume_payload["conversation_id"] = None
+                    connection.execute(
+                        "UPDATE tasks SET metadata_json = ? WHERE id = ?",
+                        (json.dumps(metadata, ensure_ascii=False), task["id"]),
+                    )
+
+            if self._fts_enabled:
+                connection.execute(
+                    """DELETE FROM search_index
+                       WHERE kind = 'message'
+                         AND ref_id IN (SELECT id FROM messages WHERE conversation_id = ?)""",
+                    (conversation_id,),
+                )
+                connection.execute(
+                    "DELETE FROM search_index WHERE kind = 'conversation' AND ref_id = ?",
+                    (conversation_id,),
+                )
+
+            connection.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+
+            if self._fts_enabled:
+                for task in related_tasks:
+                    row = connection.execute(
+                        "SELECT * FROM tasks WHERE id = ?", (task["id"],)
+                    ).fetchone()
+                    if not row:
+                        continue
+                    body = "\n".join(
+                        str(part)
+                        for part in (row["prompt"], row["result"], row["error"], row["stage"])
+                        if part
+                    )
+                    self._put_search_row(
+                        connection,
+                        "task",
+                        row["id"],
+                        row["title"],
+                        body,
+                        {
+                            "task_id": row["id"],
+                            "conversation_id": row["conversation_id"],
+                            "project_id": row["project_id"],
+                            "status": row["status"],
+                            "provider_id": row["provider_id"],
+                        },
+                        row["completed_at"] or row["started_at"] or row["created_at"],
+                    )
+            return True
+
     def rename_conversation(self, conversation_id: str, title: str) -> None:
         now = utcnow()
         self._execute(
@@ -512,29 +583,32 @@ class Database:
         provider_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        message_id = make_id("msg")
-        now = utcnow()
-        self._execute(
-            "INSERT INTO messages(id,conversation_id,role,provider_id,content,metadata_json,created_at) VALUES(?,?,?,?,?,?,?)",
-            (message_id, conversation_id, role, provider_id, content, json.dumps(metadata or {}), now),
-        )
-        self._index(
-            "message",
-            message_id,
-            f"{role} · {provider_id or 'AI Hub'}",
-            content,
-            {"conversation_id": conversation_id, "provider_id": provider_id},
-            now,
-        )
-        self._execute(
-            "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conversation_id)
-        )
-        if role == "user":
-            conversation = self.get_conversation(conversation_id)
-            if conversation and conversation["title"] == "新對話":
-                clean = " ".join(content.split())
-                self.rename_conversation(conversation_id, clean[:42] or "新對話")
-        return self._decode(self._one("SELECT * FROM messages WHERE id = ?", (message_id,))) or {}
+        with self._write_lock:
+            if not self.get_conversation(conversation_id):
+                return {}
+            message_id = make_id("msg")
+            now = utcnow()
+            self._execute(
+                "INSERT INTO messages(id,conversation_id,role,provider_id,content,metadata_json,created_at) VALUES(?,?,?,?,?,?,?)",
+                (message_id, conversation_id, role, provider_id, content, json.dumps(metadata or {}), now),
+            )
+            self._index(
+                "message",
+                message_id,
+                f"{role} · {provider_id or 'AI Hub'}",
+                content,
+                {"conversation_id": conversation_id, "provider_id": provider_id},
+                now,
+            )
+            self._execute(
+                "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conversation_id)
+            )
+            if role == "user":
+                conversation = self.get_conversation(conversation_id)
+                if conversation and conversation["title"] == "新對話":
+                    clean = " ".join(content.split())
+                    self.rename_conversation(conversation_id, clean[:42] or "新對話")
+            return self._decode(self._one("SELECT * FROM messages WHERE id = ?", (message_id,))) or {}
 
     def list_messages(self, conversation_id: str) -> list[dict[str, Any]]:
         return [self._decode(row) or {} for row in self._all(

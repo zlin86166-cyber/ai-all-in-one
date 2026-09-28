@@ -1,10 +1,10 @@
 # AI Hub (ai-all-in-one)
 
-[公開下載站](https://ai-hub-windows-download.ai-pro-myhome.chatgpt.site) · [直接下載 Windows ZIP](https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.1/AIHub-Windows.zip) · [v0.2.1 Release](https://github.com/zlin86166-cyber/ai-all-in-one/releases/tag/v0.2.1)
+[公開下載站](https://ai-hub-windows-download.ai-pro-myhome.chatgpt.site) · [直接下載 Windows ZIP](https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.2/AIHub-Windows.zip) · [v0.2.2 Release](https://github.com/zlin86166-cyber/ai-all-in-one/releases/tag/v0.2.2)
 
 AI Hub 是一套 **Windows 本機多模型 AI Operator Console**。正式產品只以原生 Windows 桌面版發佈：下載 `AIHub-Windows.zip`、解壓後直接執行 `AIHub.exe`，專案、對話、任務、模型 metadata、研究索引與設定都保存在本機。
 
-核心支援 **Codex CLI、Gemini CLI、Ollama 本機模型、≤50B 的 Kimi/DeepSeek 官方開源模型、OpenAI-compatible 推論節點、ComfyUI**，並整合多專案、檔案操作、PowerShell、任務進度、ETA、歷史對話、AI 協作、研究爬蟲、排程與權限控制。
+核心支援 **Codex CLI、Gemini CLI、Ollama 本機模型、≤50B 的 Kimi/DeepSeek 官方開源模型、OpenAI-compatible 推論節點、ComfyUI**，並整合多專案、檔案操作、PowerShell、任務進度、ETA、歷史對話（含永久刪除）、AI 協作、研究爬蟲、排程與權限控制。
 
 ## 正式發佈形式
 
@@ -135,4 +135,6 @@ AI Hub 會在執行檔旁建立或使用：
 
 啟動時會顯示三步使用導覽；任何時候按 F1 可重新開啟。預設已啟用 Full / MaxControl，先選專案、連接一個 AI，再輸入工作即可。若需要較低權限可用 `--safe-mode`。F5 重新檢查連線，Ctrl+K 搜尋，Ctrl+Enter 送出。訓練需要先獨立下載本地權重。
 
-main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.0 Release 不會因 main 更新而自動替換。
+在「歷史對話」選取聊天後按「刪除」即可永久移除該對話與訊息；相關任務紀錄會保留，執行中的工作也會繼續，但完成結果不會再寫回已刪除的對話。
+
+main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.2 Release 不會因 main 更新而自動替換。
