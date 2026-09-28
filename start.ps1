@@ -31,10 +31,8 @@ if ($Elevate -and -not $isAdministrator) {
 
 $runtimeRoot = Join-Path $appRoot '.runtime'
 $cliBin = Join-Path $runtimeRoot 'cli\node_modules\.bin'
-$openAIBin = Join-Path $runtimeRoot 'openai-cli'
 $pathParts = [System.Collections.Generic.List[string]]::new()
 if (Test-Path -LiteralPath $cliBin) { $pathParts.Add($cliBin) }
-if (Test-Path -LiteralPath $openAIBin) { $pathParts.Add($openAIBin) }
 $portableNodeRoot = Join-Path $runtimeRoot 'node'
 if (Test-Path -LiteralPath $portableNodeRoot) {
     $portableNode = Get-ChildItem -LiteralPath $portableNodeRoot -Filter node.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1

@@ -1,9 +1,9 @@
 const DOWNLOAD_URL =
-  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.0/AIHub-Windows.zip';
+  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.1/AIHub-Windows.zip';
 const REPOSITORY_URL = 'https://github.com/zlin86166-cyber/ai-all-in-one';
 
 const features = [
-  ['CLI 原生接入', 'Codex、Gemini 與 ChatGPT API 都從本機官方 CLI 啟動。'],
+  ['CLI 原生接入', 'Codex 與 Gemini 都從本機官方 CLI 啟動。'],
   ['多 AI 協作', '規劃、分工、並行、Peer Review 與成果彙整都在同一條任務時間線。'],
   ['專案與檔案', '切換不同專案，選取檔案範圍，預覽、修改、下載與匯入匯出。'],
   ['本機模型', '發現 Ollama 模型，並同步 Kimi／DeepSeek 官方 ≤50B 模型目錄。'],
@@ -22,7 +22,7 @@ export default function Home() {
         <div className="navMeta">
           <span className="statusDot" />
           <span>Windows release</span>
-          <span className="version">v0.2.0</span>
+          <span className="version">v0.2.1</span>
         </div>
       </nav>
 
@@ -30,7 +30,7 @@ export default function Home() {
         <div className="eyebrow"><span>●</span> LOCAL-FIRST AI OPERATOR</div>
         <h1>一個桌面，<br />指揮所有 AI。</h1>
         <p className="heroCopy">
-          白色潔淨的 Windows 原生工作台，把 Codex、Gemini、ChatGPT、DeepSeek、Kimi
+          白色潔淨的 Windows 原生工作台，把 Codex、Gemini、DeepSeek、Kimi
           與其他開源模型放進同一個可追蹤、可協作的工作流程。
         </p>
         <div className="actions">
@@ -53,7 +53,7 @@ export default function Home() {
           <div className="consoleGrid">
             <div className="agents">
               <p className="consoleLabel">SELECTED AGENTS</p>
-              {['Codex CLI', 'Gemini CLI', 'ChatGPT API CLI', 'deepseek-r1:7b'].map((agent, index) => (
+              {['Codex CLI', 'Gemini CLI', 'deepseek-r1:7b'].map((agent, index) => (
                 <div className="agent" key={agent}>
                   <span className={index === 1 ? 'idle' : ''}>●</span>
                   <strong>{agent}</strong>
@@ -77,7 +77,7 @@ export default function Home() {
 
       <section className="metricsBand">
         <div className="shell statGrid">
-          <div><b>3</b><span>官方 CLI</span></div>
+          <div><b>2</b><span>官方 CLI</span></div>
           <div><b>≤50B</b><span>模型上限</span></div>
           <div><b>10/10</b><span>封裝自檢</span></div>
           <div><b>Local</b><span>SQLite 對話資料</span></div>
@@ -133,8 +133,8 @@ export default function Home() {
         <div className="shell footerInner">
           <div><strong>AI Hub</strong><p>Native multi-model operator for Windows.</p></div>
           <div className="footerLinks">
-            <a href={DOWNLOAD_URL}>下載 v0.2.0</a>
-            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.0`} target="_blank" rel="noreferrer">Release notes</a>
+            <a href={DOWNLOAD_URL}>下載 v0.2.1</a>
+            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.1`} target="_blank" rel="noreferrer">Release notes</a>
             <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
           </div>
         </div>

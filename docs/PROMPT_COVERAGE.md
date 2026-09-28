@@ -13,7 +13,7 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 | Frozen integration execution | DONE | `IntegrationManager` uses `AIHubModelSync.exe`, `AIHubPlayPublish.exe` and `AIHubSitesAssist.exe` instead of treating frozen `AIHub.exe` as a Python interpreter. |
 | Gemini CLI conversation | DONE | `GeminiProvider`. |
 | Codex CLI conversation | DONE | `CodexProvider`. |
-| ChatGPT CLI conversation | DONE | `ChatGPTCLIProvider` invokes the official `openai responses create` CLI; authentication uses the configured API-key environment variable. |
+| Standalone ChatGPT API CLI | REMOVED | Removed at the user's request; Codex CLI remains the OpenAI coding agent. |
 | Execution progress / ETA / predicted end | DONE | Task/event/progress/predicted time fields and UI. |
 | Other open-source AI | DONE | Ollama discovery plus OpenAI-compatible endpoints. |
 | Multiple projects / selected files | DONE | Project scope, file explorer, preview, selected files, write controls. |
@@ -42,7 +42,7 @@ Status meanings: `DONE` = executable implementation exists; `MEASURE` = implemen
 
 - AI Hub is a Windows native desktop product, not a Web UI product.
 - The release must be usable by launching `AIHub.exe` locally.
-- Codex/Gemini/OpenAI CLI initialization is handled by `setup.ps1`; portable Node.js and the SHA256-verified official OpenAI Windows binary are installed into `.runtime`.
+- Codex/Gemini CLI initialization is handled by `setup.ps1`; portable Node.js is installed into `.runtime` when needed.
 - QLoRA is intentionally different: a real NVIDIA CUDA/Python ML environment is required and may be specified with `AI_HUB_TRAINING_PYTHON`.
 - Runtime data remains local beside the installed/extracted app unless the user explicitly transfers it elsewhere.
 

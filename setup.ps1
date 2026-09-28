@@ -1,6 +1,5 @@
 param(
     [switch]$InstallCli,
-    [switch]$InstallOpenAICli,
     [switch]$InstallRecommendedModel,
     [switch]$CreateDesktopShortcut,
     [switch]$MaxControlShortcut,
@@ -14,8 +13,7 @@ $appRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $runtimeRoot = Join-Path $appRoot '.runtime'
 $nodeRoot = Join-Path $runtimeRoot 'node'
 $cliRoot = Join-Path $runtimeRoot 'cli'
-$openAIRoot = Join-Path $runtimeRoot 'openai-cli'
-New-Item -ItemType Directory -Path $runtimeRoot, $nodeRoot, $cliRoot, $openAIRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $runtimeRoot, $nodeRoot, $cliRoot -Force | Out-Null
 
 function Resolve-AIHubNode {
     $systemNode = Get-Command node -ErrorAction SilentlyContinue
@@ -41,43 +39,12 @@ function Install-AIHubPortableNode {
     return $installed.FullName
 }
 
-function Install-AIHubOpenAICli {
-    Write-Host 'Downloading the latest official OpenAI CLI Windows release...'
-    $headers = @{ 'User-Agent' = 'AI-Hub-Setup' }
-    $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/openai/openai-cli/releases/latest'
-    $asset = $release.assets | Where-Object { $_.name -like 'openai_*_windows_amd64.zip' } | Select-Object -First 1
-    if (-not $asset) { throw 'The official OpenAI CLI Windows amd64 archive was not found.' }
-    if (-not $asset.digest -or -not $asset.digest.StartsWith('sha256:')) {
-        throw 'The official OpenAI CLI release does not expose a SHA256 digest.'
-    }
-    $temporaryArchive = Join-Path ([IO.Path]::GetTempPath()) "ai-hub-$($asset.name)"
-    try {
-        Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile $temporaryArchive
-        $actualDigest = (Get-FileHash -LiteralPath $temporaryArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-        $expectedDigest = $asset.digest.Substring(7).ToLowerInvariant()
-        if ($actualDigest -ne $expectedDigest) { throw 'OpenAI CLI archive SHA256 verification failed.' }
-        Expand-Archive -LiteralPath $temporaryArchive -DestinationPath $openAIRoot -Force
-    }
-    finally {
-        if (Test-Path -LiteralPath $temporaryArchive) { Remove-Item -LiteralPath $temporaryArchive -Force }
-    }
-    $openAIExecutable = Get-ChildItem -LiteralPath $openAIRoot -Filter openai.exe -Recurse | Select-Object -First 1
-    if (-not $openAIExecutable) { throw 'openai.exe was not found after extracting the official release.' }
-    $openAIVersion = & $openAIExecutable.FullName --version
-    if ($LASTEXITCODE -ne 0) { throw "OpenAI CLI version probe failed with exit code $LASTEXITCODE" }
-    Write-Host $openAIVersion
-    return $openAIExecutable.FullName
-}
-
 if ($MaxControlShortcut) { $CreateDesktopShortcut = $true }
 
-if (-not ($InstallCli -or $InstallOpenAICli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
+if (-not ($InstallCli -or $InstallRecommendedModel -or $CreateDesktopShortcut -or $InstallStartup -or $InstallWatchdog)) {
     $InstallCli = $true
-    $InstallOpenAICli = $true
     $CreateDesktopShortcut = $true
 }
-
-if ($InstallCli) { $InstallOpenAICli = $true }
 
 if ($InstallCli) {
     $nodeExecutable = Resolve-AIHubNode
@@ -103,11 +70,6 @@ if ($InstallCli) {
         & $python.Source -m pip install --disable-pip-version-check --upgrade 'huggingface_hub[cli]'
         if ($LASTEXITCODE -ne 0) { Write-Warning 'huggingface_hub installation failed; metadata sync still works, direct HF download may require a separate Python environment.' }
     }
-}
-
-if ($InstallOpenAICli) {
-    $openAILauncher = Install-AIHubOpenAICli
-    Write-Host "OpenAI CLI: $openAILauncher"
 }
 
 if ($InstallRecommendedModel) {

@@ -26,10 +26,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "allow_private_research": False,
     "maintenance_enabled": True,
     "provider_config": {
-        "chatgpt": {
-            "model": "gpt-5.4",
-            "api_key_env": "OPENAI_API_KEY",
-        },
         "compatible": {
             "base_url": "http://127.0.0.1:8000/v1",
             "model": "",
@@ -215,6 +211,9 @@ class Settings:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 loaded = {}
+        provider_config = loaded.get("provider_config")
+        if isinstance(provider_config, dict):
+            provider_config.pop("chatgpt", None)
         return _deep_merge(DEFAULT_SETTINGS, loaded)
 
     def get(self, key: str, default: Any = None) -> Any:

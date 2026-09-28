@@ -14,7 +14,7 @@ from ai_hub.db import Database
 from ai_hub.evaluator import FeasibilityEvaluator
 from ai_hub.images import ImageGenerationManager
 from ai_hub.models import ModelManager
-from ai_hub.providers import ChatGPTCLIProvider, FileTransferProvider, ProviderContext, _prompt_with_history
+from ai_hub.providers import FileTransferProvider, ProviderContext, _prompt_with_history
 from ai_hub.security import FULL_ACCESS_PHRASE, action_fingerprint, classify_command, path_inside, requires_account_approval, scoped_path, SecurityError
 from tools import google_sites_assist, model_sync
 
@@ -203,15 +203,6 @@ class ProviderAndModelTests(unittest.TestCase):
             self.assertIn("selected.py", prompt)
             self.assertIn("selected context", prompt)
             self.assertNotIn("must not leak", prompt)
-
-    def test_chatgpt_cli_response_text_extraction(self) -> None:
-        payload = {
-            "output": [
-                {"type": "reasoning", "content": []},
-                {"type": "message", "content": [{"type": "output_text", "text": "CLI works"}]},
-            ]
-        }
-        self.assertEqual(ChatGPTCLIProvider._response_text(payload), "CLI works")
 
     def test_file_transfer_copies_bytes_and_reports_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

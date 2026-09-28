@@ -731,7 +731,7 @@ class AIHubDesktop:
         self.integration_tree.tag_configure("online", foreground=GREEN)
         self.integration_tree.tag_configure("setup", foreground=WARN)
         ttk.Button(status_frame, text="重新檢查", command=lambda: self.refresh_providers(True)).grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Button(status_frame, text="安裝 / 更新 CLI (Codex · Gemini · ChatGPT)", command=self.install_clis).grid(row=1, column=1, padx=5, pady=(8, 0))
+        ttk.Button(status_frame, text="安裝 / 更新 CLI (Codex · Gemini)", command=self.install_clis).grid(row=1, column=1, padx=5, pady=(8, 0))
         ttk.Button(status_frame, text="Codex 登入", command=lambda: self.open_cli_login("codex")).grid(row=1, column=2, padx=5, pady=(8, 0))
         ttk.Button(status_frame, text="Gemini 登入", style="Accent.TButton", command=lambda: self.open_cli_login("gemini")).grid(row=1, column=3, pady=(8, 0))
 
@@ -752,34 +752,29 @@ class AIHubDesktop:
         config.grid_columnconfigure(3, weight=1)
         ttk.Label(config, text="開源推論節點與繪圖服務設定", style="Metric.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 9))
         provider_config = self.app.settings.get("provider_config", {})
-        chatgpt = provider_config.get("chatgpt", {})
         compatible = provider_config.get("compatible", {})
         comfyui = provider_config.get("comfyui", {})
-        self.chatgpt_model = tk.StringVar(value=chatgpt.get("model", "gpt-5.4"))
-        self.chatgpt_env = tk.StringVar(value=chatgpt.get("api_key_env", "OPENAI_API_KEY"))
         self.compatible_url = tk.StringVar(value=compatible.get("base_url", "http://127.0.0.1:8000/v1"))
         self.compatible_model = tk.StringVar(value=compatible.get("model", ""))
         self.compatible_env = tk.StringVar(value=compatible.get("api_key_env", "AI_HUB_API_KEY"))
         self.comfy_url = tk.StringVar(value=comfyui.get("base_url", "http://127.0.0.1:8188"))
         self.comfy_checkpoint = tk.StringVar(value=comfyui.get("checkpoint", ""))
         fields = (
-            ("ChatGPT API 模型", self.chatgpt_model, 1, 0),
-            ("OpenAI 金鑰變數", self.chatgpt_env, 1, 2),
-            ("Compatible 端點 URL", self.compatible_url, 2, 0),
-            ("Compatible 模型名稱", self.compatible_model, 2, 2),
-            ("Compatible 金鑰變數", self.compatible_env, 3, 0),
-            ("ComfyUI 繪圖 URL", self.comfy_url, 4, 0),
-            ("繪圖 Checkpoint", self.comfy_checkpoint, 4, 2),
+            ("Compatible 端點 URL", self.compatible_url, 1, 0),
+            ("Compatible 模型名稱", self.compatible_model, 1, 2),
+            ("Compatible 金鑰變數", self.compatible_env, 2, 0),
+            ("ComfyUI 繪圖 URL", self.comfy_url, 3, 0),
+            ("繪圖 Checkpoint", self.comfy_checkpoint, 3, 2),
         )
         for label, variable, row, column in fields:
             ttk.Label(config, text=label, style="Muted.TLabel").grid(row=row, column=column, sticky="w", padx=(0, 7), pady=5)
             ttk.Entry(config, textvariable=variable).grid(row=row, column=column + 1, sticky="ew", padx=(0, 14), pady=5)
         ttk.Label(
             config,
-            text="Codex、Gemini 與 ChatGPT API 均走本機官方 CLI；ChatGPT 金鑰不寫入資料庫，只讀取指定環境變數。",
+            text="Codex 與 Gemini 使用官方 CLI；其他模型可透過相容端點或本機推論服務連線。",
             style="Muted.TLabel",
-        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(12, 0))
-        ttk.Button(config, text="儲存並重新載入", style="Green.TButton", command=self.save_integrations).grid(row=5, column=3, sticky="e", pady=(12, 0))
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Button(config, text="儲存並重新載入", style="Green.TButton", command=self.save_integrations).grid(row=4, column=3, sticky="e", pady=(12, 0))
 
     def _build_automation_tab(self) -> None:
         tab = self.automation_tab
@@ -1931,10 +1926,6 @@ class AIHubDesktop:
     def save_integrations(self) -> None:
         values = {
             "provider_config": {
-                "chatgpt": {
-                    "model": self.chatgpt_model.get().strip() or "gpt-5.4",
-                    "api_key_env": self.chatgpt_env.get().strip() or "OPENAI_API_KEY",
-                },
                 "compatible": {
                     "base_url": self.compatible_url.get().strip(),
                     "model": self.compatible_model.get().strip(),
