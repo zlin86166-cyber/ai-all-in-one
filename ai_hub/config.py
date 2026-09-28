@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.2.3"
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "zh-TW",

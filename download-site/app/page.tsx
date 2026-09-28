@@ -1,5 +1,5 @@
 const DOWNLOAD_URL =
-  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.2/AIHub-Windows.zip';
+  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.3/AIHub-Windows.zip';
 const REPOSITORY_URL = 'https://github.com/zlin86166-cyber/ai-all-in-one';
 
 const features = [
@@ -22,7 +22,7 @@ export default function Home() {
         <div className="navMeta">
           <span className="statusDot" />
           <span>Windows release</span>
-          <span className="version">v0.2.2</span>
+          <span className="version">v0.2.3</span>
         </div>
       </nav>
 
@@ -30,7 +30,7 @@ export default function Home() {
         <div className="eyebrow"><span>●</span> LOCAL-FIRST AI OPERATOR</div>
         <h1>一個桌面，<br />指揮所有 AI。</h1>
         <p className="heroCopy">
-          白色潔淨的 Windows 原生工作台，把 Codex、Gemini、DeepSeek、Kimi
+          深色極簡的 Windows 原生工作台，把 Codex、Gemini、DeepSeek、Kimi
           與其他開源模型放進同一個可追蹤、可協作的工作流程。
         </p>
         <div className="actions">
@@ -133,8 +133,8 @@ export default function Home() {
         <div className="shell footerInner">
           <div><strong>AI Hub</strong><p>Native multi-model operator for Windows.</p></div>
           <div className="footerLinks">
-            <a href={DOWNLOAD_URL}>下載 v0.2.2</a>
-            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.2`} target="_blank" rel="noreferrer">Release notes</a>
+            <a href={DOWNLOAD_URL}>下載 v0.2.3</a>
+            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.3`} target="_blank" rel="noreferrer">Release notes</a>
             <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
           </div>
         </div>

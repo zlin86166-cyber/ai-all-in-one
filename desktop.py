@@ -22,19 +22,19 @@ from ai_hub.security import FULL_ACCESS_PHRASE
 from ai_hub.ui_depth import DepthCard, DepthMark, apply_depth_styles
 
 
-BG = "#EDF2FA"
-PANEL = "#FFFFFF"
-PANEL_2 = "#F8FAFC"
-EDGE = "#E2E8F0"
-CYAN = "#2563EB"
-GREEN = "#16A34A"
-PURPLE = "#7C3AED"
-TEXT = "#0F172A"
-MUTED = "#64748B"
-WARN = "#D97706"
-DANGER = "#DC2626"
-INPUT_BG = "#FFFFFF"
-SELECT_BG = "#EFF6FF"
+BG = "#070707"
+PANEL = "#0B0B0D"
+PANEL_2 = "#111214"
+EDGE = "#25272A"
+CYAN = "#65D9E7"
+GREEN = "#79DFA7"
+PURPLE = "#B79CFF"
+TEXT = "#ECEDEF"
+MUTED = "#858A91"
+WARN = "#E7B667"
+DANGER = "#E87587"
+INPUT_BG = "#090A0B"
+SELECT_BG = "#1A3135"
 
 
 def parse_args() -> argparse.Namespace:
@@ -180,25 +180,25 @@ class AIHubDesktop:
         style.configure("Metric.TLabel", background=PANEL_2, foreground=CYAN, font=("Cascadia Mono", 10, "bold"))
         style.configure("HeaderMetric.TLabel", background=BG, foreground=CYAN, font=("Cascadia Mono", 10, "bold"))
         style.configure(
-            "TButton", background="#F8FAFC", foreground=TEXT, bordercolor=EDGE,
+            "TButton", background="#141518", foreground=TEXT, bordercolor=EDGE,
             focuscolor=CYAN, padding=(10, 7), font=("Microsoft JhengHei UI", 9),
         )
-        style.map("TButton", background=[("active", "#EFF6FF"), ("pressed", "#E2E8F0")])
-        style.configure("Accent.TButton", background=CYAN, foreground="#FFFFFF", bordercolor=CYAN)
-        style.map("Accent.TButton", background=[("active", "#1D4ED8")], foreground=[("active", "#FFFFFF")])
-        style.configure("Green.TButton", background=GREEN, foreground="#FFFFFF", bordercolor=GREEN)
-        style.map("Green.TButton", background=[("active", "#15803D")], foreground=[("active", "#FFFFFF")])
-        style.configure("Danger.TButton", background=DANGER, foreground="#FFFFFF", bordercolor=DANGER)
-        style.map("Danger.TButton", background=[("active", "#B91C1C")], foreground=[("active", "#FFFFFF")])
+        style.map("TButton", background=[("active", "#202226"), ("pressed", "#1A1C1F")])
+        style.configure("Accent.TButton", background="#12363B", foreground=CYAN, bordercolor="#25606A")
+        style.map("Accent.TButton", background=[("active", "#17454C")], foreground=[("active", TEXT)])
+        style.configure("Green.TButton", background="#153626", foreground=GREEN, bordercolor="#286141")
+        style.map("Green.TButton", background=[("active", "#1B4932")], foreground=[("active", TEXT)])
+        style.configure("Danger.TButton", background="#36161A", foreground=DANGER, bordercolor="#69303A")
+        style.map("Danger.TButton", background=[("active", "#4A1D24")], foreground=[("active", TEXT)])
         style.configure("TEntry", fieldbackground=INPUT_BG, foreground=TEXT, insertcolor=CYAN, bordercolor=EDGE, padding=7)
         style.configure("TCombobox", fieldbackground=INPUT_BG, background=INPUT_BG, foreground=TEXT, arrowcolor=CYAN, padding=5)
         style.map("TCombobox", fieldbackground=[("readonly", INPUT_BG)], foreground=[("readonly", TEXT)])
-        style.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor="#F8FAFC", padding=3)
+        style.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor="#202226", padding=3)
         style.map("TCheckbutton", indicatorcolor=[("selected", CYAN)], foreground=[("disabled", MUTED)])
         style.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=TEXT, bordercolor=EDGE, rowheight=28)
         style.configure("Treeview.Heading", background=PANEL_2, foreground=CYAN, bordercolor=EDGE, font=("Cascadia Mono", 9, "bold"))
         style.map("Treeview", background=[("selected", SELECT_BG)], foreground=[("selected", CYAN)])
-        style.map("Treeview.Heading", background=[("active", "#F1F5F9")])
+        style.map("Treeview.Heading", background=[("active", "#1A1C1F")])
         style.configure("TNotebook", background=BG, bordercolor=EDGE)
         style.configure("TNotebook.Tab", background=PANEL_2, foreground=MUTED, padding=(13, 8), font=("Cascadia Mono", 9, "bold"))
         style.map("TNotebook.Tab", background=[("selected", PANEL)], foreground=[("selected", CYAN), ("active", TEXT)])
@@ -207,8 +207,8 @@ class AIHubDesktop:
         style.configure("TLabelframe.Label", background=PANEL, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
         style.configure(
             "AccessBadge.TLabel",
-            background="#DCFCE7",
-            foreground="#166534",
+            background="#153626",
+            foreground=GREEN,
             padding=(8, 4),
             font=("Cascadia Mono", 9, "bold"),
         )
@@ -235,7 +235,7 @@ class AIHubDesktop:
         self._build_workspace(self.main)
         self.status_var = tk.StringVar(value="正在初始化本機工作台…")
         status = tk.Label(
-            self.root, textvariable=self.status_var, bg="#F8FAFC", fg=MUTED,
+            self.root, textvariable=self.status_var, bg="#0B0B0D", fg=MUTED,
             anchor="w", padx=14, pady=5, font=("Cascadia Mono", 9),
         )
         status.grid(row=2, column=0, sticky="ew")
@@ -1267,6 +1267,9 @@ class AIHubDesktop:
 
     def refresh_tasks(self) -> None:
         tasks = self.app.database.list_tasks(limit=160)
+        dashboard_tasks = getattr(self, "_set_dashboard_tasks", None)
+        if callable(dashboard_tasks):
+            dashboard_tasks(tasks)
         signature = tuple(
             (item["id"], item.get("status"), round(float(item.get("progress") or 0), 1), item.get("stage"), item.get("completed_at"))
             for item in tasks
@@ -2357,6 +2360,9 @@ class AIHubDesktop:
             f"DISK {disk.get('free_gb', 0):.1f}G FREE  //  {'AC' if power.get('ac_connected') else 'BAT'}  //  "
             f"{'ADMIN' if admin else 'USER'} · {access} · {boost}"
         )
+        dashboard_snapshot = getattr(self, "_set_dashboard_snapshot", None)
+        if callable(dashboard_snapshot):
+            dashboard_snapshot(snapshot)
 
     def force_refresh(self) -> None:
         self.message_signature = None

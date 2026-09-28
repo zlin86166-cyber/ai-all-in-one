@@ -1,12 +1,12 @@
 # AI Hub requirement coverage
 
-Updated: 2026-09-12
+Updated: 2026-09-28
 
 Status meanings: `DONE` = executable implementation exists; `MEASURE` = implementation exists but the requested superiority/result depends on real benchmark data; `PLATFORM` = implementation is limited by an external platform capability and must not be misrepresented.
 
 | Requirement | Status | Implementation |
 |---|---|---|
-| Native white clean geek interface | DONE | Native desktop uses the white `desktop.py` operator console; `desktop_geek.py` is an optional dark skin and is not the packaged default. |
+| Native dark minimalist dashboard | DONE | Packaged and source launchers open `desktop_geek.py`; the initial overview renders live CPU/RAM history, resource utilization, task states, and actual completed-task durations. |
 | Downloadable local Windows package | DONE | Windows Build creates `AIHub.exe`, three bundled integration helpers, setup/watchdog files, training files and `AIHub-Windows.zip`; `v*` tags attach the ZIP to GitHub Release. |
 | Local launch without Web server | DONE | `start.ps1` launches native desktop only; `-Web` is explicitly rejected. Release users can launch `AIHub.exe` directly. |
 | Normal launch without forced admin | DONE | Native build no longer embeds `--uac-admin`; `start.ps1 -Elevate` is explicit. `-MaxControl` is also explicit. |

@@ -10,6 +10,9 @@ main AIHub.exe entry point.
 
 import os
 import subprocess
+import time
+from collections import deque
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,19 +26,19 @@ import desktop as native
 # Dark graphite + restrained neon accents.  The base implementation resolves these
 # module globals at runtime, so existing functional tabs inherit the same palette.
 PALETTE = {
-    "BG": "#060A0F",
-    "PANEL": "#0A1118",
-    "PANEL_2": "#0E1721",
-    "EDGE": "#1B2B38",
-    "CYAN": "#35D6FF",
-    "GREEN": "#43F59A",
-    "PURPLE": "#A78BFA",
-    "TEXT": "#E8F2F7",
-    "MUTED": "#78909C",
-    "WARN": "#FFB84D",
-    "DANGER": "#FF5573",
-    "INPUT_BG": "#081019",
-    "SELECT_BG": "#12334A",
+    "BG": "#070707",
+    "PANEL": "#0B0B0D",
+    "PANEL_2": "#111214",
+    "EDGE": "#25272A",
+    "CYAN": "#65D9E7",
+    "GREEN": "#79DFA7",
+    "PURPLE": "#B79CFF",
+    "TEXT": "#ECEDEF",
+    "MUTED": "#858A91",
+    "WARN": "#E7B667",
+    "DANGER": "#E87587",
+    "INPUT_BG": "#090A0B",
+    "SELECT_BG": "#1A3135",
 }
 for name, value in PALETTE.items():
     setattr(native, name, value)
@@ -53,16 +56,27 @@ WARN = PALETTE["WARN"]
 DANGER = PALETTE["DANGER"]
 INPUT_BG = PALETTE["INPUT_BG"]
 SELECT_BG = PALETTE["SELECT_BG"]
-DEEP = "#02070B"
-SIDEBAR = "#080E14"
-HEADER = "#070D13"
-HOVER = "#132432"
+DEEP = "#040404"
+SIDEBAR = "#080809"
+HEADER = "#070708"
+HOVER = "#17191C"
 
 BaseDesktop = native.AIHubDesktop
 
 
 class GeekDesktop(BaseDesktop):
     """Refined native-only operator deck with first-class local CLI access."""
+
+    def __init__(self, app: native.AIHubApplication, max_control: bool = False):
+        self._cpu_history: deque[tuple[float, float]] = deque(maxlen=90)
+        self._memory_history: deque[tuple[float, float]] = deque(maxlen=90)
+        self._dashboard_tasks: list[dict[str, Any]] = []
+        self._dashboard_task_signature: tuple[Any, ...] | None = None
+        self._dashboard_canvases: dict[str, tk.Canvas] = {}
+        self._dashboard_kpis: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
+        self._dashboard_live_var: tk.StringVar | None = None
+        self._dashboard_last_sample = 0.0
+        super().__init__(app, max_control=max_control)
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
@@ -89,10 +103,19 @@ class GeekDesktop(BaseDesktop):
         style.configure("Metric.TLabel", background=PANEL_2, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
         style.configure("HeaderMetric.TLabel", background=HEADER, foreground=GREEN, font=("Cascadia Mono", 9, "bold"))
         style.configure("Hero.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 13, "bold"))
+        style.configure("DashboardTitle.TLabel", background=BG, foreground=TEXT, font=("Microsoft JhengHei UI", 16, "bold"))
+        style.configure("DashboardSub.TLabel", background=BG, foreground=MUTED, font=("Cascadia Mono", 8))
+        style.configure("DashboardLive.TLabel", background=BG, foreground=GREEN, font=("Cascadia Mono", 8, "bold"))
+        style.configure("ChartTitle.TLabel", background=PANEL, foreground=TEXT, font=("Cascadia Mono", 9, "bold"))
+        style.configure("ChartMeta.TLabel", background=PANEL, foreground=MUTED, font=("Cascadia Mono", 7))
+        style.configure("Kpi.TFrame", background=PANEL_2, bordercolor=EDGE, relief="flat")
+        style.configure("KpiTitle.TLabel", background=PANEL_2, foreground=MUTED, font=("Cascadia Mono", 8, "bold"))
+        style.configure("KpiValue.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 18, "bold"))
+        style.configure("KpiMeta.TLabel", background=PANEL_2, foreground=MUTED, font=("Microsoft JhengHei UI", 8))
 
         style.configure(
             "TButton",
-            background="#101B25",
+            background="#141518",
             foreground=TEXT,
             bordercolor=EDGE,
             focuscolor=CYAN,
@@ -102,28 +125,28 @@ class GeekDesktop(BaseDesktop):
         )
         style.map(
             "TButton",
-            background=[("active", HOVER), ("pressed", "#0C2736")],
+            background=[("active", HOVER), ("pressed", "#1A1C1F")],
             foreground=[("disabled", "#536570")],
-            bordercolor=[("focus", CYAN), ("active", "#294357")],
+            bordercolor=[("focus", CYAN), ("active", "#35383D")],
         )
         style.configure("Ghost.TButton", background=HEADER, foreground=MUTED, bordercolor=EDGE, padding=(10, 6))
         style.map("Ghost.TButton", background=[("active", HOVER)], foreground=[("active", TEXT)])
-        style.configure("Accent.TButton", background="#0C7691", foreground="#F5FDFF", bordercolor="#179FC1", padding=(12, 7))
-        style.map("Accent.TButton", background=[("active", "#108DAA"), ("pressed", "#09657C")])
-        style.configure("Green.TButton", background="#0C754A", foreground="#F2FFF8", bordercolor="#18A869", padding=(12, 7))
-        style.map("Green.TButton", background=[("active", "#10925B"), ("pressed", "#08603D")])
-        style.configure("Danger.TButton", background="#78273A", foreground="#FFF4F7", bordercolor="#A83B53", padding=(12, 7))
-        style.map("Danger.TButton", background=[("active", "#933047")])
-        style.configure("Cli.TButton", background="#102632", foreground=CYAN, bordercolor="#1A4D61", padding=(12, 7), font=("Cascadia Mono", 9, "bold"))
-        style.map("Cli.TButton", background=[("active", "#163A49")], foreground=[("active", "#A8EEFF")])
+        style.configure("Accent.TButton", background="#12363B", foreground=CYAN, bordercolor="#25606A", padding=(12, 7))
+        style.map("Accent.TButton", background=[("active", "#17454C"), ("pressed", "#102D31")])
+        style.configure("Green.TButton", background="#153626", foreground=GREEN, bordercolor="#286141", padding=(12, 7))
+        style.map("Green.TButton", background=[("active", "#1B4932"), ("pressed", "#10291D")])
+        style.configure("Danger.TButton", background="#36161A", foreground=DANGER, bordercolor="#69303A", padding=(12, 7))
+        style.map("Danger.TButton", background=[("active", "#4A1D24")])
+        style.configure("Cli.TButton", background="#11191A", foreground=CYAN, bordercolor="#293638", padding=(12, 7), font=("Cascadia Mono", 9, "bold"))
+        style.map("Cli.TButton", background=[("active", "#1A2425")], foreground=[("active", TEXT)])
 
         style.configure("TEntry", fieldbackground=INPUT_BG, foreground=TEXT, insertcolor=CYAN, bordercolor=EDGE, padding=8)
         style.map("TEntry", bordercolor=[("focus", CYAN)])
         style.configure("TCombobox", fieldbackground=INPUT_BG, background=INPUT_BG, foreground=TEXT, arrowcolor=CYAN, bordercolor=EDGE, padding=6)
         style.map("TCombobox", fieldbackground=[("readonly", INPUT_BG)], foreground=[("readonly", TEXT)], bordercolor=[("focus", CYAN)])
-        style.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor="#12202B", padding=4)
+        style.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor="#1C1E21", padding=4)
         style.map("TCheckbutton", indicatorcolor=[("selected", GREEN)], foreground=[("disabled", MUTED)])
-        style.configure("Sidebar.TCheckbutton", background=SIDEBAR, foreground=TEXT, indicatorcolor="#12202B", padding=4)
+        style.configure("Sidebar.TCheckbutton", background=SIDEBAR, foreground=TEXT, indicatorcolor="#1C1E21", padding=4)
         style.map("Sidebar.TCheckbutton", indicatorcolor=[("selected", GREEN)], foreground=[("disabled", MUTED)])
 
         style.configure(
@@ -137,19 +160,19 @@ class GeekDesktop(BaseDesktop):
         )
         style.configure(
             "Treeview.Heading",
-            background="#0C1620",
+            background="#151619",
             foreground=CYAN,
             bordercolor=EDGE,
             font=("Cascadia Mono", 8, "bold"),
             padding=(5, 7),
         )
-        style.map("Treeview", background=[("selected", SELECT_BG)], foreground=[("selected", "#E9FAFF")])
+        style.map("Treeview", background=[("selected", SELECT_BG)], foreground=[("selected", TEXT)])
         style.map("Treeview.Heading", background=[("active", HOVER)])
 
         style.configure("TNotebook", background=BG, bordercolor=BG, tabmargins=(8, 8, 8, 0))
         style.configure(
             "TNotebook.Tab",
-            background="#09111A",
+            background="#0A0A0B",
             foreground=MUTED,
             bordercolor=EDGE,
             padding=(15, 9),
@@ -157,11 +180,11 @@ class GeekDesktop(BaseDesktop):
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", PANEL_2), ("active", "#101D28")],
+            background=[("selected", PANEL_2), ("active", "#181A1D")],
             foreground=[("selected", CYAN), ("active", TEXT)],
-            bordercolor=[("selected", "#28516A")],
+            bordercolor=[("selected", "#36393D")],
         )
-        style.configure("TProgressbar", troughcolor="#071018", background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
+        style.configure("TProgressbar", troughcolor="#191A1C", background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
         style.configure("TLabelframe", background=PANEL, foreground=CYAN, bordercolor=EDGE, relief="solid")
         style.configure("TLabelframe.Label", background=PANEL, foreground=CYAN, font=("Cascadia Mono", 8, "bold"))
 
@@ -179,7 +202,7 @@ class GeekDesktop(BaseDesktop):
         content = tk.PanedWindow(
             self.root,
             orient=tk.HORIZONTAL,
-            bg="#10202C",
+            bg=EDGE,
             sashwidth=2,
             borderwidth=0,
             sashrelief=tk.FLAT,
@@ -302,6 +325,7 @@ class GeekDesktop(BaseDesktop):
         self.tabs = ttk.Notebook(parent)
         self.tabs.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=(0, 0))
 
+        self.overview_tab = ttk.Frame(self.tabs)
         self.chat_tab = ttk.Frame(self.tabs)
         self.agents_tab = ttk.Frame(self.tabs)
         self.files_tab = ttk.Frame(self.tabs)
@@ -312,6 +336,7 @@ class GeekDesktop(BaseDesktop):
         self.automation_tab = ttk.Frame(self.tabs)
         self.draw_tab = ttk.Frame(self.tabs)
         for frame, label in (
+            (self.overview_tab, "00  OVERVIEW"),
             (self.chat_tab, "01  CHAT"),
             (self.agents_tab, "02  TASKS"),
             (self.files_tab, "03  FILES"),
@@ -324,6 +349,7 @@ class GeekDesktop(BaseDesktop):
         ):
             self.tabs.add(frame, text=label)
 
+        self._build_overview_tab()
         self._build_chat_tab()
         BaseDesktop._build_agents_tab(self)
         BaseDesktop._build_files_tab(self)
@@ -333,6 +359,262 @@ class GeekDesktop(BaseDesktop):
         BaseDesktop._build_integrations_tab(self)
         BaseDesktop._build_automation_tab(self)
         BaseDesktop._build_draw_tab(self)
+
+    def _build_overview_tab(self) -> None:
+        tab = self.overview_tab
+        tab.grid_columnconfigure(0, weight=3, uniform="overview_top")
+        tab.grid_columnconfigure(1, weight=2, uniform="overview_top")
+        tab.grid_rowconfigure(2, weight=3, minsize=210)
+        tab.grid_rowconfigure(3, weight=2, minsize=165)
+
+        heading = ttk.Frame(tab, style="TFrame", padding=(14, 12, 14, 7))
+        heading.grid(row=0, column=0, columnspan=2, sticky="ew")
+        heading.grid_columnconfigure(0, weight=1)
+        ttk.Label(heading, text="SYSTEM OVERVIEW", style="DashboardTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(heading, text="LOCAL TELEMETRY  /  LIVE WORKSPACE", style="DashboardSub.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+        self._dashboard_live_var = tk.StringVar(value="LIVE  //  WAITING FOR SAMPLE")
+        ttk.Label(heading, textvariable=self._dashboard_live_var, style="DashboardLive.TLabel").grid(row=0, column=1, rowspan=2, sticky="e")
+
+        kpis = ttk.Frame(tab, style="TFrame")
+        kpis.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=(2, 9))
+        for column in range(4):
+            kpis.grid_columnconfigure(column, weight=1, uniform="overview_kpi")
+        for column, (key, label) in enumerate((
+            ("cpu", "CPU LOAD"),
+            ("memory", "MEMORY"),
+            ("disk", "DISK FREE"),
+            ("tasks", "ACTIVE TASKS"),
+        )):
+            card = ttk.Frame(kpis, style="Kpi.TFrame", padding=(13, 9))
+            card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 5, 5 if column < 3 else 0))
+            ttk.Label(card, text=label, style="KpiTitle.TLabel").pack(anchor="w")
+            value = tk.StringVar(value="--")
+            meta = tk.StringVar(value="WAITING FOR LIVE DATA")
+            ttk.Label(card, textvariable=value, style="KpiValue.TLabel").pack(anchor="w", pady=(4, 0))
+            ttk.Label(card, textvariable=meta, style="KpiMeta.TLabel").pack(anchor="w", pady=(1, 0))
+            self._dashboard_kpis[key] = (value, meta)
+
+        self._dashboard_canvases["trend"] = self._chart_card(
+            tab, "CPU / MEMORY TREND", "LAST 2 MINUTES  ·  SAMPLED LOCALLY", row=2, column=0
+        )
+        self._dashboard_canvases["resources"] = self._chart_card(
+            tab, "RESOURCE PROFILE", "CURRENT UTILIZATION", row=2, column=1
+        )
+        self._dashboard_canvases["tasks"] = self._chart_card(
+            tab, "TASK DISTRIBUTION", "LATEST 160 TASKS", row=3, column=0
+        )
+        self._dashboard_canvases["durations"] = self._chart_card(
+            tab, "RECENT RUNTIME", "COMPLETED TASKS  ·  ACTUAL ELAPSED TIME", row=3, column=1
+        )
+
+    def _chart_card(
+        self, parent: ttk.Frame, title: str, meta: str, *, row: int, column: int
+    ) -> tk.Canvas:
+        frame = tk.Frame(parent, bg=EDGE, padx=1, pady=1)
+        frame.grid(row=row, column=column, sticky="nsew", padx=(14 if column == 0 else 5, 5 if column == 0 else 14), pady=(0, 9 if row == 2 else 13))
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(1, weight=1)
+        body = ttk.Frame(frame, style="Panel.TFrame")
+        body.grid(row=0, column=0, rowspan=2, sticky="nsew")
+        body.grid_columnconfigure(0, weight=1)
+        body.grid_rowconfigure(1, weight=1)
+        header = ttk.Frame(body, style="Panel.TFrame", padding=(12, 9, 12, 4))
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
+        ttk.Label(header, text=title, style="ChartTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(header, text=meta, style="ChartMeta.TLabel").grid(row=0, column=1, sticky="e")
+        canvas = tk.Canvas(body, bg=PANEL, highlightthickness=0, bd=0, height=170)
+        canvas.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 7))
+        canvas.bind("<Configure>", lambda _event, chart=canvas: self._redraw_dashboard_chart(chart))
+        return canvas
+
+    def _set_dashboard_snapshot(self, snapshot: dict[str, Any]) -> None:
+        now = time.monotonic()
+        if now - self._dashboard_last_sample >= 1.0:
+            self._dashboard_last_sample = now
+            cpu = max(0.0, min(100.0, float(snapshot.get("cpu_percent") or 0)))
+            memory = snapshot.get("memory") or {}
+            self._cpu_history.append((now, cpu))
+            self._memory_history.append((now, max(0.0, min(100.0, float(memory.get("percent") or 0)))))
+
+        memory = snapshot.get("memory") or {}
+        disk = snapshot.get("disk") or {}
+        total_ram = memory.get("total_gb") or 0
+        available_ram = memory.get("available_gb") or 0
+        free_disk = disk.get("free_gb") or 0
+        self._set_kpi("cpu", f"{float(snapshot.get('cpu_percent') or 0):.0f}%", "PROCESSOR UTILIZATION")
+        self._set_kpi("memory", f"{int(memory.get('percent') or 0)}%", f"{available_ram:g} GB FREE / {total_ram:g} GB")
+        self._set_kpi("disk", f"{free_disk:g} GB", f"{float(disk.get('percent') or 0):.0f}% USED")
+        if self._dashboard_live_var:
+            self._dashboard_live_var.set(f"● LIVE  //  {datetime.now().astimezone().strftime('%H:%M:%S')}")
+        self._redraw_dashboard_chart(self._dashboard_canvases.get("trend"))
+        self._redraw_dashboard_chart(self._dashboard_canvases.get("resources"), snapshot)
+
+    def _set_dashboard_tasks(self, tasks: list[dict[str, Any]]) -> None:
+        self._dashboard_tasks = tasks
+        signature = tuple(
+            (task.get("id"), task.get("status"), round(float(task.get("progress") or 0), 1), task.get("started_at"), task.get("completed_at"))
+            for task in tasks
+        )
+        if signature == self._dashboard_task_signature:
+            return
+        self._dashboard_task_signature = signature
+        active = sum(task.get("status") in {"queued", "running", "cancelling"} for task in tasks)
+        queued = sum(task.get("status") == "queued" for task in tasks)
+        self._set_kpi("tasks", str(active), f"{queued} QUEUED  /  {len(tasks)} RECENT")
+        self._redraw_dashboard_chart(self._dashboard_canvases.get("tasks"))
+        self._redraw_dashboard_chart(self._dashboard_canvases.get("durations"))
+
+    def _set_kpi(self, key: str, value: str, meta: str) -> None:
+        variables = self._dashboard_kpis.get(key)
+        if variables:
+            variables[0].set(value)
+            variables[1].set(meta)
+
+    def _redraw_dashboard_chart(
+        self, canvas: tk.Canvas | None, snapshot: dict[str, Any] | None = None
+    ) -> None:
+        if canvas is None or not canvas.winfo_exists():
+            return
+        chart = next((name for name, item in self._dashboard_canvases.items() if item is canvas), "")
+        if chart == "trend":
+            self._draw_trend_chart(canvas)
+        elif chart == "resources":
+            self._draw_resource_chart(canvas, snapshot or {})
+        elif chart == "tasks":
+            self._draw_task_chart(canvas)
+        elif chart == "durations":
+            self._draw_duration_chart(canvas)
+
+    def _draw_trend_chart(self, canvas: tk.Canvas) -> None:
+        canvas.delete("all")
+        width, height = max(canvas.winfo_width(), 240), max(canvas.winfo_height(), 145)
+        left, right, top, bottom = 39, width - 13, 18, height - 25
+        plot_height = bottom - top
+        now = time.monotonic()
+        for value in (0, 50, 100):
+            y = bottom - plot_height * value / 100
+            canvas.create_line(left, y, right, y, fill=EDGE, dash=(2, 4))
+            canvas.create_text(left - 8, y, text=str(value), fill=MUTED, anchor="e", font=("Cascadia Mono", 7))
+        for age in (120, 60, 0):
+            x = left + (right - left) * (120 - age) / 120
+            canvas.create_line(x, top, x, bottom, fill="#1B1C1E", dash=(1, 5))
+            canvas.create_text(x, height - 7, text=f"-{age}s" if age else "NOW", fill=MUTED, anchor="s", font=("Cascadia Mono", 7))
+
+        for history, color in ((self._cpu_history, CYAN), (self._memory_history, GREEN)):
+            points: list[float] = []
+            for timestamp, value in history:
+                age = max(0.0, now - timestamp)
+                if age > 120:
+                    continue
+                x = right - (right - left) * age / 120
+                y = bottom - plot_height * max(0.0, min(100.0, value)) / 100
+                points.extend((x, y))
+            if len(points) >= 4:
+                canvas.create_line(*points, fill=color, width=2, smooth=True, splinesteps=12)
+
+        canvas.create_line(width - 150, 10, width - 137, 10, fill=CYAN, width=2)
+        canvas.create_text(width - 132, 10, text="CPU", fill=TEXT, anchor="w", font=("Cascadia Mono", 7, "bold"))
+        canvas.create_line(width - 90, 10, width - 77, 10, fill=GREEN, width=2)
+        canvas.create_text(width - 72, 10, text="RAM", fill=TEXT, anchor="w", font=("Cascadia Mono", 7, "bold"))
+        if len(self._cpu_history) < 2:
+            canvas.create_text((left + right) / 2, (top + bottom) / 2, text="Collecting live samples…", fill=MUTED, font=("Cascadia Mono", 8))
+
+    def _draw_resource_chart(self, canvas: tk.Canvas, snapshot: dict[str, Any]) -> None:
+        canvas.delete("all")
+        width, height = max(canvas.winfo_width(), 220), max(canvas.winfo_height(), 145)
+        memory = snapshot.get("memory") or {}
+        disk = snapshot.get("disk") or {}
+        rows = (
+            ("CPU", float(snapshot.get("cpu_percent") or 0), CYAN),
+            ("MEMORY", float(memory.get("percent") or 0), GREEN),
+            ("DISK", float(disk.get("percent") or 0), PURPLE),
+        )
+        label_x, bar_left, bar_right = 13, 88, width - 48
+        bar_width = max(20, bar_right - bar_left)
+        row_gap = (height - 34) / len(rows)
+        for index, (label, value, color) in enumerate(rows):
+            y = 18 + index * row_gap
+            clipped = max(0.0, min(100.0, value))
+            canvas.create_text(label_x, y, text=label, fill=MUTED, anchor="w", font=("Cascadia Mono", 7, "bold"))
+            canvas.create_text(width - 12, y, text=f"{clipped:.0f}%", fill=TEXT, anchor="e", font=("Cascadia Mono", 8, "bold"))
+            canvas.create_rectangle(bar_left, y + 11, bar_right, y + 18, fill="#202124", outline="")
+            canvas.create_rectangle(bar_left, y + 11, bar_left + bar_width * clipped / 100, y + 18, fill=color, outline="")
+        if not snapshot:
+            canvas.create_text(width / 2, height - 9, text="Waiting for hardware snapshot", fill=MUTED, anchor="s", font=("Cascadia Mono", 7))
+
+    def _draw_task_chart(self, canvas: tk.Canvas) -> None:
+        canvas.delete("all")
+        width, height = max(canvas.winfo_width(), 240), max(canvas.winfo_height(), 130)
+        states = (
+            ("RUNNING", {"running", "cancelling"}, CYAN),
+            ("QUEUED", {"queued"}, WARN),
+            ("DONE", {"completed"}, GREEN),
+            ("FAILED", {"failed"}, DANGER),
+            ("CANCELLED", {"cancelled"}, MUTED),
+        )
+        counts = [(label, sum(task.get("status") in statuses for task in self._dashboard_tasks), color) for label, statuses, color in states]
+        total = sum(count for _label, count, _color in counts)
+        diameter = min(height - 20, 112)
+        x0, y0 = 16, max(8, (height - diameter) / 2)
+        bbox = (x0, y0, x0 + diameter, y0 + diameter)
+        canvas.create_oval(*bbox, outline="#202124", width=13)
+        if total:
+            angle = 90
+            for _label, count, color in counts:
+                if not count:
+                    continue
+                extent = 360 * count / total
+                canvas.create_arc(*bbox, start=angle, extent=-extent, style=tk.ARC, outline=color, width=13)
+                angle -= extent
+        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 - 3, text=str(total), fill=TEXT, font=("Cascadia Mono", 18, "bold"))
+        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 + 17, text="TASKS", fill=MUTED, font=("Cascadia Mono", 7, "bold"))
+        legend_x = x0 + diameter + 25
+        legend_y = max(12, (height - len(counts) * 19) / 2)
+        for index, (label, count, color) in enumerate(counts):
+            y = legend_y + index * 19
+            canvas.create_oval(legend_x, y - 4, legend_x + 7, y + 3, fill=color, outline="")
+            canvas.create_text(legend_x + 14, y, text=label, fill=MUTED, anchor="w", font=("Cascadia Mono", 7, "bold"))
+            canvas.create_text(width - 13, y, text=str(count), fill=TEXT, anchor="e", font=("Cascadia Mono", 8, "bold"))
+
+    @staticmethod
+    def _task_duration(task: dict[str, Any]) -> float | None:
+        try:
+            start = datetime.fromisoformat(str(task.get("started_at") or "").replace("Z", "+00:00"))
+            end = datetime.fromisoformat(str(task.get("completed_at") or "").replace("Z", "+00:00"))
+            return max(0.0, (end - start).total_seconds())
+        except (TypeError, ValueError):
+            return None
+
+    def _draw_duration_chart(self, canvas: tk.Canvas) -> None:
+        canvas.delete("all")
+        width, height = max(canvas.winfo_width(), 260), max(canvas.winfo_height(), 130)
+        completed = [
+            (task, self._task_duration(task))
+            for task in self._dashboard_tasks
+            if task.get("status") == "completed"
+        ]
+        rows = sorted(
+            ((task, duration) for task, duration in completed if duration is not None),
+            key=lambda item: str(item[0].get("completed_at") or ""),
+            reverse=True,
+        )[:6]
+        if not rows:
+            canvas.create_text(width / 2, height / 2, text="No completed task timings yet", fill=MUTED, font=("Cascadia Mono", 8))
+            return
+        left, right = 116, width - 55
+        top = 14
+        row_height = min(25, max(16, (height - 22) / len(rows)))
+        max_duration = max(duration for _task, duration in rows) or 1.0
+        for index, (task, duration) in enumerate(rows):
+            y = top + index * row_height
+            title = str(task.get("provider_id") or task.get("title") or "TASK")[:15]
+            canvas.create_text(left - 8, y + 5, text=title, fill=MUTED, anchor="e", font=("Cascadia Mono", 7))
+            canvas.create_rectangle(left, y, right, y + 9, fill="#202124", outline="")
+            canvas.create_rectangle(left, y, left + max(2, (right - left) * duration / max_duration), y + 9, fill=GREEN, outline="")
+            canvas.create_text(width - 7, y + 5, text=native.compact_seconds(duration), fill=TEXT, anchor="e", font=("Cascadia Mono", 7))
+        canvas.create_text(left, height - 4, text="FAST", fill=MUTED, anchor="sw", font=("Cascadia Mono", 7))
+        canvas.create_text(right, height - 4, text="SLOW", fill=MUTED, anchor="se", font=("Cascadia Mono", 7))
 
     def _mono_text(self, parent: tk.Misc, **kwargs: Any) -> ScrolledText:
         return ScrolledText(

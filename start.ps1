@@ -61,7 +61,7 @@ try {
     if (-not $pythonWindow -and -not $pythonCommand) {
         throw 'AIHub.exe was not found and Python 3.11 or newer is not installed. Download the Windows release package or rebuild AIHub.exe.'
     }
-    $entry = Join-Path $appRoot 'desktop.py'
+    $entry = Join-Path $appRoot 'desktop_geek.py'
     if ($pythonWindow) { & $pythonWindow.Source $entry @arguments }
     else { & $pythonCommand.Source $entry @arguments }
 }
