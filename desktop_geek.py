@@ -21,6 +21,7 @@ from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import desktop as native
+from ai_hub.cli_usage import query_codex_usage
 
 
 # Dark graphite + restrained neon accents.  The base implementation resolves these
@@ -76,7 +77,14 @@ class GeekDesktop(BaseDesktop):
         self._dashboard_kpis: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
         self._dashboard_live_var: tk.StringVar | None = None
         self._dashboard_last_sample = 0.0
+        self._cli_usage_query_running = False
+        self._cli_usage_timer: str | None = None
+        self._cli_usage_refresh_button: ttk.Button | None = None
+        self._cli_usage_checked_var: tk.StringVar | None = None
+        self._gemini_usage_hint_var: tk.StringVar | None = None
+        self._cli_usage_windows: dict[str, dict[str, Any]] = {}
         super().__init__(app, max_control=max_control)
+        self.root.after(1500, self.refresh_cli_usage)
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
@@ -112,6 +120,7 @@ class GeekDesktop(BaseDesktop):
         style.configure("KpiTitle.TLabel", background=PANEL_2, foreground=MUTED, font=("Cascadia Mono", 8, "bold"))
         style.configure("KpiValue.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 18, "bold"))
         style.configure("KpiMeta.TLabel", background=PANEL_2, foreground=MUTED, font=("Microsoft JhengHei UI", 8))
+        style.configure("Quota.Horizontal.TProgressbar", troughcolor="#1A1C1F", background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
 
         style.configure(
             "TButton",
@@ -364,8 +373,9 @@ class GeekDesktop(BaseDesktop):
         tab = self.overview_tab
         tab.grid_columnconfigure(0, weight=3, uniform="overview_top")
         tab.grid_columnconfigure(1, weight=2, uniform="overview_top")
-        tab.grid_rowconfigure(2, weight=3, minsize=210)
-        tab.grid_rowconfigure(3, weight=2, minsize=165)
+        tab.grid_rowconfigure(2, weight=0, minsize=104)
+        tab.grid_rowconfigure(3, weight=3, minsize=210)
+        tab.grid_rowconfigure(4, weight=2, minsize=165)
 
         heading = ttk.Frame(tab, style="TFrame", padding=(14, 12, 14, 7))
         heading.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -394,24 +404,153 @@ class GeekDesktop(BaseDesktop):
             ttk.Label(card, textvariable=meta, style="KpiMeta.TLabel").pack(anchor="w", pady=(1, 0))
             self._dashboard_kpis[key] = (value, meta)
 
+        self._build_cli_usage_panel(tab)
+
         self._dashboard_canvases["trend"] = self._chart_card(
-            tab, "CPU / MEMORY TREND", "LAST 2 MINUTES  ·  SAMPLED LOCALLY", row=2, column=0
+            tab, "CPU / MEMORY TREND", "LAST 2 MINUTES  ·  SAMPLED LOCALLY", row=3, column=0
         )
         self._dashboard_canvases["resources"] = self._chart_card(
-            tab, "RESOURCE PROFILE", "CURRENT UTILIZATION", row=2, column=1
+            tab, "RESOURCE PROFILE", "CURRENT UTILIZATION", row=3, column=1
         )
         self._dashboard_canvases["tasks"] = self._chart_card(
-            tab, "TASK DISTRIBUTION", "LATEST 160 TASKS", row=3, column=0
+            tab, "TASK DISTRIBUTION", "LATEST 160 TASKS", row=4, column=0
         )
         self._dashboard_canvases["durations"] = self._chart_card(
-            tab, "RECENT RUNTIME", "COMPLETED TASKS  ·  ACTUAL ELAPSED TIME", row=3, column=1
+            tab, "RECENT RUNTIME", "COMPLETED TASKS  ·  ACTUAL ELAPSED TIME", row=4, column=1
         )
+
+    def _build_cli_usage_panel(self, parent: ttk.Frame) -> None:
+        panel = tk.Frame(parent, bg=EDGE, padx=1, pady=1)
+        panel.grid(row=2, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 9))
+        body = ttk.Frame(panel, style="Panel.TFrame", padding=(12, 7))
+        body.pack(fill=tk.BOTH, expand=True)
+        for column in range(2):
+            body.grid_columnconfigure(column, weight=1, uniform="cli_usage")
+
+        codex = ttk.Frame(body, style="Panel.TFrame")
+        codex.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        codex.grid_columnconfigure(0, weight=1)
+        codex_header = ttk.Frame(codex, style="Panel.TFrame")
+        codex_header.grid(row=0, column=0, sticky="ew")
+        codex_header.grid_columnconfigure(0, weight=1)
+        ttk.Label(codex_header, text="CODEX CLI  /  ACCOUNT LIMITS", style="ChartTitle.TLabel").grid(row=0, column=0, sticky="w")
+        self._cli_usage_refresh_button = ttk.Button(
+            codex_header, text="REFRESH", style="Ghost.TButton", command=self.refresh_cli_usage
+        )
+        self._cli_usage_refresh_button.grid(row=0, column=1, sticky="e")
+        windows = ttk.Frame(codex, style="Panel.TFrame")
+        windows.grid(row=1, column=0, sticky="ew", pady=(3, 0))
+        for column in range(2):
+            windows.grid_columnconfigure(column, weight=1, uniform="codex_window")
+        for column, key in enumerate(("primary", "secondary")):
+            cell = ttk.Frame(windows, style="Panel.TFrame")
+            cell.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 10, 4 if column == 0 else 0))
+            cell.grid_columnconfigure(0, weight=1)
+            title = tk.StringVar(value="5H  --" if column == 0 else "7D  --")
+            value = tk.StringVar(value="--")
+            reset = tk.StringVar(value="WAITING FOR CLI SNAPSHOT")
+            ttk.Label(cell, textvariable=title, style="ChartMeta.TLabel").grid(row=0, column=0, sticky="w")
+            ttk.Label(cell, textvariable=value, style="Metric.TLabel").grid(row=0, column=1, sticky="e", padx=(5, 0))
+            bar = ttk.Progressbar(cell, maximum=100, value=0, style="Quota.Horizontal.TProgressbar")
+            bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 1))
+            ttk.Label(cell, textvariable=reset, style="ChartMeta.TLabel").grid(row=2, column=0, columnspan=2, sticky="w")
+            self._cli_usage_windows[key] = {"title": title, "value": value, "reset": reset, "bar": bar}
+        self._cli_usage_checked_var = tk.StringVar(value="READ-ONLY · CODEX APP-SERVER")
+        ttk.Label(codex, textvariable=self._cli_usage_checked_var, style="ChartMeta.TLabel").grid(row=2, column=0, sticky="w", pady=(2, 0))
+
+        gemini = ttk.Frame(body, style="Panel.TFrame")
+        gemini.grid(row=0, column=1, sticky="nsew", padx=(12, 0))
+        gemini.grid_columnconfigure(0, weight=1)
+        gemini.grid_columnconfigure(1, weight=0)
+        ttk.Label(gemini, text="GEMINI CLI  /  MODEL QUOTA", style="ChartTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            gemini,
+            text="OPEN  /stats model",
+            style="Ghost.TButton",
+            command=self.open_gemini_usage,
+        ).grid(row=0, column=1, sticky="e")
+        self._gemini_usage_hint_var = tk.StringVar(value="CLI 互動指令提供額度資料；請在視窗輸入 /stats model。")
+        ttk.Label(
+            gemini,
+            textvariable=self._gemini_usage_hint_var,
+            style="ChartMeta.TLabel",
+            wraplength=440,
+            justify=tk.LEFT,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(9, 0))
+
+    def refresh_cli_usage(self) -> None:
+        if self._cli_usage_query_running or self.closing:
+            return
+        if self._cli_usage_timer:
+            try:
+                self.root.after_cancel(self._cli_usage_timer)
+            except tk.TclError:
+                pass
+            self._cli_usage_timer = None
+        self._cli_usage_query_running = True
+        if self._cli_usage_refresh_button and self._cli_usage_refresh_button.winfo_exists():
+            self._cli_usage_refresh_button.configure(state=tk.DISABLED, text="QUERYING…")
+        if self._cli_usage_checked_var:
+            self._cli_usage_checked_var.set("QUERYING VIA CODEX APP-SERVER…")
+
+        def work() -> dict[str, Any]:
+            workdir = self._current_workdir()
+            return query_codex_usage(self.app.paths, workdir)
+
+        self._async(work, success=self._apply_cli_usage, failure=self._apply_cli_usage_error)
+
+    def _apply_cli_usage(self, snapshot: dict[str, Any]) -> None:
+        self._cli_usage_query_running = False
+        for item in self._cli_usage_windows.values():
+            item["title"].set("NO WINDOW DATA")
+            item["value"].set("--")
+            item["reset"].set("NOT RETURNED BY CODEX CLI")
+            item["bar"].configure(value=0)
+        for window in snapshot.get("windows", []):
+            key = window.get("key")
+            if key not in self._cli_usage_windows:
+                continue
+            item = self._cli_usage_windows[key]
+            remaining = float(window["remaining_percent"])
+            item["title"].set(f"{window['label']}  REMAINING")
+            item["value"].set(f"{remaining:g}%")
+            item["bar"].configure(value=remaining)
+            reset_at = window.get("resets_at")
+            if reset_at:
+                reset_text = datetime.fromtimestamp(float(reset_at)).astimezone().strftime("%m/%d %H:%M")
+                item["reset"].set(f"RESET  {reset_text}  ·  LOCAL TIME")
+            else:
+                item["reset"].set("RESET TIME NOT PROVIDED")
+        if self._cli_usage_checked_var:
+            self._cli_usage_checked_var.set(f"READ-ONLY · UPDATED {datetime.now().astimezone().strftime('%H:%M:%S')}")
+        self._finish_cli_usage_refresh()
+
+    def _apply_cli_usage_error(self, error: Exception) -> None:
+        self._cli_usage_query_running = False
+        for item in self._cli_usage_windows.values():
+            item["title"].set("CODEX LIMITS")
+            item["value"].set("--")
+            item["reset"].set(str(error))
+            item["bar"].configure(value=0)
+        if self._cli_usage_checked_var:
+            self._cli_usage_checked_var.set("NO VERIFIED CLI SNAPSHOT")
+        self._finish_cli_usage_refresh()
+
+    def _finish_cli_usage_refresh(self) -> None:
+        if self._cli_usage_refresh_button and self._cli_usage_refresh_button.winfo_exists():
+            self._cli_usage_refresh_button.configure(state=tk.NORMAL, text="REFRESH")
+        if not self.closing:
+            self._cli_usage_timer = self.root.after(300_000, self.refresh_cli_usage)
+
+    def open_gemini_usage(self) -> None:
+        self.open_cli_shell("gemini")
+        self._set_status("GEMINI USAGE // 在新開啟的 Gemini CLI 輸入 /stats model 查詢剩餘額度")
 
     def _chart_card(
         self, parent: ttk.Frame, title: str, meta: str, *, row: int, column: int
     ) -> tk.Canvas:
         frame = tk.Frame(parent, bg=EDGE, padx=1, pady=1)
-        frame.grid(row=row, column=column, sticky="nsew", padx=(14 if column == 0 else 5, 5 if column == 0 else 14), pady=(0, 9 if row == 2 else 13))
+        frame.grid(row=row, column=column, sticky="nsew", padx=(14 if column == 0 else 5, 5 if column == 0 else 14), pady=(0, 9 if row == 3 else 13))
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
         body = ttk.Frame(frame, style="Panel.TFrame")

@@ -1,6 +1,6 @@
 # AI Hub (ai-all-in-one)
 
-[公開下載站](https://ai-hub-windows-download.ai-pro-myhome.chatgpt.site) · [直接下載 Windows ZIP](https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.3/AIHub-Windows.zip) · [v0.2.3 Release](https://github.com/zlin86166-cyber/ai-all-in-one/releases/tag/v0.2.3)
+[公開下載站](https://ai-hub-windows-download.ai-pro-myhome.chatgpt.site) · [直接下載 Windows ZIP](https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.4/AIHub-Windows.zip) · [v0.2.4 Release](https://github.com/zlin86166-cyber/ai-all-in-one/releases/tag/v0.2.4)
 
 AI Hub 是一套 **Windows 本機多模型 AI Operator Console**。正式產品只以原生 Windows 桌面版發佈：下載 `AIHub-Windows.zip`、解壓後直接執行 `AIHub.exe`，專案、對話、任務、模型 metadata、研究索引與設定都保存在本機。
 
@@ -17,7 +17,7 @@ Windows Build 會產生完整的本機套件：
 - `setup.ps1`：初始化 Codex/Gemini CLI runtime 與桌面捷徑。
 - watchdog / model-sync 腳本。
 - `training/`：QLoRA 訓練腳本；實際訓練仍需要相容 NVIDIA CUDA / Python ML 環境。
-- 原生深色總覽頁：顯示即時 CPU／記憶體曲線、磁碟與資源使用率、任務狀態及實際完成耗時。
+- 原生深色總覽頁：顯示即時 CPU／記憶體曲線、磁碟與資源使用率、任務狀態及實際完成耗時；Codex 額度透過 CLI app-server 查詢 5 小時／週剩餘比例，Gemini 則可從總覽直接開啟 CLI 使用 `/stats model` 查詢。
 
 GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；建立 `v*` tag 時，同一個 ZIP 會附加到 GitHub Release，作為可直接下載的 Windows 發行包。
 
@@ -67,7 +67,7 @@ GitHub Actions 的 **Windows Build** 會上傳 `AIHub-Windows.zip` artifact；�
 
 ## 主要能力
 
-- **Native Windows UI**：以 `desktop_geek.py` 啟動的黑色極簡 Operator Console；預設總覽頁呈現即時資源、任務分布與實際耗時圖表。
+- **Native Windows UI**：以 `desktop_geek.py` 啟動的黑色極簡 Operator Console；預設總覽頁呈現即時資源、任務分布、實際耗時圖表及 CLI 額度查詢。
 - **CLI AI**：Codex CLI、Gemini CLI。
 - **本機/開源 AI**：Ollama 自動發現；vLLM、SGLang、llama.cpp、LM Studio 等可透過 OpenAI-compatible endpoint 接入。
 - **多專案與檔案**：瀏覽、預覽、選取、修改、儲存、匯入/匯出與受控下載。
@@ -138,4 +138,4 @@ AI Hub 會在執行檔旁建立或使用：
 
 在「歷史對話」選取聊天後按「刪除」即可永久移除該對話與訊息；相關任務紀錄會保留，執行中的工作也會繼續，但完成結果不會再寫回已刪除的對話。
 
-main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.3 Release 不會因 main 更新而自動替換。
+main 的最新建置請到 Actions → Windows Build → Artifacts 下載；v0.2.4 Release 不會因 main 更新而自動替換。

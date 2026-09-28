@@ -1,5 +1,6 @@
 const DOWNLOAD_URL =
-  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.3/AIHub-Windows.zip';
+  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.4/AIHub-Windows.zip';
+const RELEASE_VERSION = 'v0.2.4';
 const REPOSITORY_URL = 'https://github.com/zlin86166-cyber/ai-all-in-one';
 
 const features = [
@@ -8,6 +9,7 @@ const features = [
   ['專案與檔案', '切換不同專案，選取檔案範圍，預覽、修改、下載與匯入匯出。'],
   ['本機模型', '發現 Ollama 模型，並同步 Kimi／DeepSeek 官方 ≤50B 模型目錄。'],
   ['進度可追蹤', '即時顯示階段、進度、預估剩餘時間、預計與實際結束時間。'],
+  ['CLI 用量', 'Codex 顯示 5 小時／週剩餘率；Gemini 可直接開啟 CLI 查詢模型額度。'],
   ['權限透明', 'Workspace、Full 與 MAX-CLI 分級；帳號發布和高風險操作保留逐次確認。'],
 ];
 
@@ -22,7 +24,7 @@ export default function Home() {
         <div className="navMeta">
           <span className="statusDot" />
           <span>Windows release</span>
-          <span className="version">v0.2.3</span>
+          <span className="version">{RELEASE_VERSION}</span>
         </div>
       </nav>
 
@@ -133,8 +135,8 @@ export default function Home() {
         <div className="shell footerInner">
           <div><strong>AI Hub</strong><p>Native multi-model operator for Windows.</p></div>
           <div className="footerLinks">
-            <a href={DOWNLOAD_URL}>下載 v0.2.3</a>
-            <a href={`${REPOSITORY_URL}/releases/tag/v0.2.3`} target="_blank" rel="noreferrer">Release notes</a>
+            <a href={DOWNLOAD_URL}>下載 {RELEASE_VERSION}</a>
+            <a href={`${REPOSITORY_URL}/releases/tag/${RELEASE_VERSION}`} target="_blank" rel="noreferrer">Release notes</a>
             <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
           </div>
         </div>
