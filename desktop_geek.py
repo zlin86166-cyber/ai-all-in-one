@@ -9,7 +9,9 @@ main AIHub.exe entry point.
 """
 
 import os
+import queue
 import subprocess
+import threading
 import time
 from collections import deque
 from datetime import datetime
@@ -21,6 +23,7 @@ from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import desktop as native
+from ai_hub.cli_discovery import scan_local_ai_clis
 from ai_hub.cli_usage import query_codex_usage
 
 
@@ -35,7 +38,7 @@ PALETTE = {
     "GREEN": "#79DFA7",
     "PURPLE": "#B79CFF",
     "TEXT": "#ECEDEF",
-    "MUTED": "#858A91",
+    "MUTED": "#A4AAB2",
     "WARN": "#E7B667",
     "DANGER": "#E87587",
     "INPUT_BG": "#090A0B",
@@ -83,13 +86,24 @@ class GeekDesktop(BaseDesktop):
         self._cli_usage_checked_var: tk.StringVar | None = None
         self._gemini_usage_hint_var: tk.StringVar | None = None
         self._cli_usage_windows: dict[str, dict[str, Any]] = {}
+        self._cli_scan_dialog: tk.Toplevel | None = None
+        self._cli_scan_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._cli_scan_cancel: threading.Event | None = None
+        self._cli_scan_running = False
+        self._cli_scan_poll_after: str | None = None
+        self._cli_scan_button: ttk.Button | None = None
+        self._cli_scan_cancel_button: ttk.Button | None = None
+        self._cli_scan_progress: ttk.Progressbar | None = None
+        self._cli_scan_status: tk.StringVar | None = None
+        self._cli_scan_summary: tk.StringVar | None = None
+        self._cli_scan_tree: ttk.Treeview | None = None
         super().__init__(app, max_control=max_control)
         self.root.after(1500, self.refresh_cli_usage)
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
         style.theme_use("clam")
-        style.configure(".", background=BG, foreground=TEXT, font=("Microsoft JhengHei UI", 10))
+        style.configure(".", background=BG, foreground=TEXT, font=("Microsoft JhengHei UI", 11))
         style.configure("TFrame", background=BG)
         style.configure("Header.TFrame", background=HEADER)
         style.configure("Sidebar.TFrame", background=SIDEBAR)
@@ -105,21 +119,21 @@ class GeekDesktop(BaseDesktop):
         style.configure("HeaderMuted.TLabel", background=HEADER, foreground=MUTED)
         style.configure("PanelMuted.TLabel", background=PANEL, foreground=MUTED)
         style.configure("Muted.TLabel", background=PANEL_2, foreground=MUTED)
-        style.configure("Section.TLabel", background=SIDEBAR, foreground=CYAN, font=("Cascadia Mono", 8, "bold"))
-        style.configure("Title.TLabel", background=HEADER, foreground=TEXT, font=("Cascadia Mono", 19, "bold"))
-        style.configure("BrandAccent.TLabel", background=HEADER, foreground=CYAN, font=("Cascadia Mono", 19, "bold"))
-        style.configure("Metric.TLabel", background=PANEL_2, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
-        style.configure("HeaderMetric.TLabel", background=HEADER, foreground=GREEN, font=("Cascadia Mono", 9, "bold"))
-        style.configure("Hero.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 13, "bold"))
-        style.configure("DashboardTitle.TLabel", background=BG, foreground=TEXT, font=("Microsoft JhengHei UI", 16, "bold"))
-        style.configure("DashboardSub.TLabel", background=BG, foreground=MUTED, font=("Cascadia Mono", 8))
-        style.configure("DashboardLive.TLabel", background=BG, foreground=GREEN, font=("Cascadia Mono", 8, "bold"))
-        style.configure("ChartTitle.TLabel", background=PANEL, foreground=TEXT, font=("Cascadia Mono", 9, "bold"))
-        style.configure("ChartMeta.TLabel", background=PANEL, foreground=MUTED, font=("Cascadia Mono", 7))
+        style.configure("Section.TLabel", background=SIDEBAR, foreground=CYAN, font=("Cascadia Mono", 9, "bold"))
+        style.configure("Title.TLabel", background=HEADER, foreground=TEXT, font=("Cascadia Mono", 21, "bold"))
+        style.configure("BrandAccent.TLabel", background=HEADER, foreground=CYAN, font=("Cascadia Mono", 21, "bold"))
+        style.configure("Metric.TLabel", background=PANEL_2, foreground=CYAN, font=("Cascadia Mono", 11, "bold"))
+        style.configure("HeaderMetric.TLabel", background=HEADER, foreground=GREEN, font=("Cascadia Mono", 10, "bold"))
+        style.configure("Hero.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 14, "bold"))
+        style.configure("DashboardTitle.TLabel", background=BG, foreground=TEXT, font=("Microsoft JhengHei UI", 19, "bold"))
+        style.configure("DashboardSub.TLabel", background=BG, foreground=MUTED, font=("Cascadia Mono", 9))
+        style.configure("DashboardLive.TLabel", background=BG, foreground=GREEN, font=("Cascadia Mono", 9, "bold"))
+        style.configure("ChartTitle.TLabel", background=PANEL, foreground=TEXT, font=("Cascadia Mono", 11, "bold"))
+        style.configure("ChartMeta.TLabel", background=PANEL, foreground=MUTED, font=("Cascadia Mono", 9))
         style.configure("Kpi.TFrame", background=PANEL_2, bordercolor=EDGE, relief="flat")
-        style.configure("KpiTitle.TLabel", background=PANEL_2, foreground=MUTED, font=("Cascadia Mono", 8, "bold"))
-        style.configure("KpiValue.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 18, "bold"))
-        style.configure("KpiMeta.TLabel", background=PANEL_2, foreground=MUTED, font=("Microsoft JhengHei UI", 8))
+        style.configure("KpiTitle.TLabel", background=PANEL_2, foreground=MUTED, font=("Cascadia Mono", 9, "bold"))
+        style.configure("KpiValue.TLabel", background=PANEL_2, foreground=TEXT, font=("Cascadia Mono", 21, "bold"))
+        style.configure("KpiMeta.TLabel", background=PANEL_2, foreground=MUTED, font=("Microsoft JhengHei UI", 9))
         style.configure("Quota.Horizontal.TProgressbar", troughcolor="#1A1C1F", background=GREEN, bordercolor=EDGE, lightcolor=GREEN, darkcolor=GREEN)
 
         style.configure(
@@ -128,8 +142,8 @@ class GeekDesktop(BaseDesktop):
             foreground=TEXT,
             bordercolor=EDGE,
             focuscolor=CYAN,
-            padding=(11, 7),
-            font=("Microsoft JhengHei UI", 9),
+            padding=(13, 9),
+            font=("Microsoft JhengHei UI", 10),
             relief="flat",
         )
         style.map(
@@ -164,16 +178,16 @@ class GeekDesktop(BaseDesktop):
             fieldbackground=PANEL,
             foreground=TEXT,
             bordercolor=EDGE,
-            rowheight=31,
-            font=("Microsoft JhengHei UI", 9),
+            rowheight=38,
+            font=("Microsoft JhengHei UI", 10),
         )
         style.configure(
             "Treeview.Heading",
             background="#151619",
             foreground=CYAN,
             bordercolor=EDGE,
-            font=("Cascadia Mono", 8, "bold"),
-            padding=(5, 7),
+            font=("Cascadia Mono", 9, "bold"),
+            padding=(7, 9),
         )
         style.map("Treeview", background=[("selected", SELECT_BG)], foreground=[("selected", TEXT)])
         style.map("Treeview.Heading", background=[("active", HOVER)])
@@ -184,8 +198,8 @@ class GeekDesktop(BaseDesktop):
             background="#0A0A0B",
             foreground=MUTED,
             bordercolor=EDGE,
-            padding=(15, 9),
-            font=("Cascadia Mono", 8, "bold"),
+            padding=(10, 9),
+            font=("Cascadia Mono", 9, "bold"),
         )
         style.map(
             "TNotebook.Tab",
@@ -218,10 +232,14 @@ class GeekDesktop(BaseDesktop):
             showhandle=False,
         )
         content.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 0))
-        sidebar = ttk.Frame(content, style="Sidebar.TFrame", width=294)
+        available_width = min(1540, max(600, self.root.winfo_screenwidth() - 24))
+        sidebar_width = min(260, max(180, int(available_width * 0.27)))
+        workspace_min_width = max(400, available_width - sidebar_width - 90)
+        self._sidebar_width = sidebar_width
+        sidebar = ttk.Frame(content, style="Sidebar.TFrame", width=sidebar_width)
         self.main = ttk.Frame(content, style="TFrame")
-        content.add(sidebar, minsize=266, width=294)
-        content.add(self.main, minsize=860)
+        content.add(sidebar, minsize=sidebar_width, width=sidebar_width)
+        content.add(self.main, minsize=workspace_min_width)
         self._build_sidebar(sidebar)
         self._build_workspace(self.main)
 
@@ -258,9 +276,9 @@ class GeekDesktop(BaseDesktop):
 
         actions = ttk.Frame(header, style="Header.TFrame")
         actions.grid(row=0, column=1, sticky="e", padx=(18, 0))
-        ttk.Button(actions, text="CODEX CLI", style="Cli.TButton", command=lambda: self.open_cli_shell("codex")).pack(side=tk.LEFT, padx=3)
-        ttk.Button(actions, text="GEMINI CLI", style="Cli.TButton", command=lambda: self.open_cli_shell("gemini")).pack(side=tk.LEFT, padx=3)
-        ttk.Button(actions, text="TERMINAL", style="Ghost.TButton", command=self.focus_terminal).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(actions, text="CODEX", style="Cli.TButton", command=lambda: self.open_cli_shell("codex")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(actions, text="GEMINI", style="Cli.TButton", command=lambda: self.open_cli_shell("gemini")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(actions, text="SCAN CLIs", style="Accent.TButton", command=self.open_cli_scanner).pack(side=tk.LEFT, padx=(6, 0))
 
         self.header_state = tk.StringVar(value="● LOCAL / SECURE")
         ttk.Label(header, textvariable=self.header_state, style="HeaderMetric.TLabel").grid(row=1, column=2, sticky="e", padx=(18, 0))
@@ -297,7 +315,7 @@ class GeekDesktop(BaseDesktop):
         tree_wrap.grid_rowconfigure(0, weight=1)
         self.conversation_tree = ttk.Treeview(tree_wrap, show="tree", selectmode="browse")
         self.conversation_tree.grid(row=0, column=0, sticky="nsew")
-        self.conversation_tree.column("#0", width=248, stretch=True)
+        self.conversation_tree.column("#0", width=max(150, self._sidebar_width - 44), stretch=True)
         self.conversation_tree.bind("<<TreeviewSelect>>", self._select_conversation)
 
         options = ttk.LabelFrame(parent, text="MISSION CONTROL", style="TLabelframe", padding=10)
@@ -345,16 +363,16 @@ class GeekDesktop(BaseDesktop):
         self.automation_tab = ttk.Frame(self.tabs)
         self.draw_tab = ttk.Frame(self.tabs)
         for frame, label in (
-            (self.overview_tab, "00  OVERVIEW"),
-            (self.chat_tab, "01  CHAT"),
-            (self.agents_tab, "02  TASKS"),
-            (self.files_tab, "03  FILES"),
-            (self.database_tab, "04  SEARCH"),
-            (self.terminal_tab, "05  CLI"),
-            (self.models_tab, "06  MODELS"),
-            (self.integrations_tab, "07  INTEGRATIONS"),
-            (self.automation_tab, "08  AUTOMATION"),
-            (self.draw_tab, "09  IMAGE"),
+            (self.overview_tab, "總覽"),
+            (self.chat_tab, "對話"),
+            (self.agents_tab, "任務"),
+            (self.files_tab, "檔案"),
+            (self.database_tab, "搜尋"),
+            (self.terminal_tab, "CLI"),
+            (self.models_tab, "模型"),
+            (self.integrations_tab, "整合"),
+            (self.automation_tab, "排程"),
+            (self.draw_tab, "繪圖"),
         ):
             self.tabs.add(frame, text=label)
 
@@ -374,8 +392,8 @@ class GeekDesktop(BaseDesktop):
         tab.grid_columnconfigure(0, weight=3, uniform="overview_top")
         tab.grid_columnconfigure(1, weight=2, uniform="overview_top")
         tab.grid_rowconfigure(2, weight=0, minsize=104)
-        tab.grid_rowconfigure(3, weight=3, minsize=210)
-        tab.grid_rowconfigure(4, weight=2, minsize=165)
+        tab.grid_rowconfigure(3, weight=3, minsize=250)
+        tab.grid_rowconfigure(4, weight=2, minsize=185)
 
         heading = ttk.Frame(tab, style="TFrame", padding=(14, 12, 14, 7))
         heading.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -407,16 +425,13 @@ class GeekDesktop(BaseDesktop):
         self._build_cli_usage_panel(tab)
 
         self._dashboard_canvases["trend"] = self._chart_card(
-            tab, "CPU / MEMORY TREND", "LAST 2 MINUTES  ·  SAMPLED LOCALLY", row=3, column=0
-        )
-        self._dashboard_canvases["resources"] = self._chart_card(
-            tab, "RESOURCE PROFILE", "CURRENT UTILIZATION", row=3, column=1
+            tab, "CPU / MEMORY", "LIVE · LAST 2 MINUTES", row=3, column=0, columnspan=2
         )
         self._dashboard_canvases["tasks"] = self._chart_card(
-            tab, "TASK DISTRIBUTION", "LATEST 160 TASKS", row=4, column=0
+            tab, "TASK STATUS", "RECENT ACTIVITY", row=4, column=0
         )
         self._dashboard_canvases["durations"] = self._chart_card(
-            tab, "RECENT RUNTIME", "COMPLETED TASKS  ·  ACTUAL ELAPSED TIME", row=4, column=1
+            tab, "TASK DURATION", "LATEST COMPLETED", row=4, column=1
         )
 
     def _build_cli_usage_panel(self, parent: ttk.Frame) -> None:
@@ -546,24 +561,259 @@ class GeekDesktop(BaseDesktop):
         self.open_cli_shell("gemini")
         self._set_status("GEMINI USAGE // 在新開啟的 Gemini CLI 輸入 /stats model 查詢剩餘額度")
 
+    def open_cli_scanner(self) -> None:
+        dialog = self._cli_scan_dialog
+        if dialog and dialog.winfo_exists():
+            dialog.deiconify()
+            dialog.lift()
+            return
+
+        dialog = tk.Toplevel(self.root)
+        self._cli_scan_dialog = dialog
+        dialog.title("AI Hub · 本機 CLI 掃描")
+        dialog.configure(bg=BG)
+        dialog.transient(self.root)
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        width = min(1180, max(820, screen_width - 100))
+        height = min(700, max(520, screen_height - 120))
+        dialog.geometry(f"{width}x{height}+{max(0, (screen_width-width)//2)}+{max(0, (screen_height-height)//2)}")
+        dialog.minsize(760, 480)
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_rowconfigure(3, weight=1)
+        dialog.protocol("WM_DELETE_WINDOW", self._close_cli_scanner)
+
+        heading = ttk.Frame(dialog, style="TFrame", padding=(22, 18, 22, 8))
+        heading.grid(row=0, column=0, sticky="ew")
+        heading.grid_columnconfigure(0, weight=1)
+        ttk.Label(heading, text="AI CLI INVENTORY", style="DashboardTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(heading, text="掃描本機磁碟上的 CLI 啟動檔", style="DashboardSub.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+        actions = ttk.Frame(dialog, style="TFrame", padding=(22, 8, 22, 10))
+        actions.grid(row=1, column=0, sticky="ew")
+        self._cli_scan_button = ttk.Button(
+            actions, text="掃描整台電腦", style="Accent.TButton", command=self._start_cli_scan
+        )
+        self._cli_scan_button.pack(side=tk.LEFT)
+        self._cli_scan_cancel_button = ttk.Button(
+            actions, text="取消掃描", style="Ghost.TButton", command=self._cancel_cli_scan, state=tk.DISABLED
+        )
+        self._cli_scan_cancel_button.pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="關閉", style="Ghost.TButton", command=self._close_cli_scanner).pack(side=tk.RIGHT)
+
+        scope = ttk.Label(
+            dialog,
+            text="掃描本機固定／卸除式磁碟及系統 PATH；略過網路磁碟、Windows 系統、暫存與大型套件快取。只讀啟動檔名稱和位置，不會執行找到的程式。",
+            style="PanelMuted.TLabel",
+            wraplength=1080,
+            justify=tk.LEFT,
+        )
+        scope.configure(wraplength=max(680, width - 90))
+        scope.grid(row=2, column=0, sticky="ew", padx=22, pady=(0, 12))
+
+        results = tk.Frame(dialog, bg=EDGE, padx=1, pady=1)
+        results.grid(row=3, column=0, sticky="nsew", padx=22, pady=(0, 10))
+        results.grid_columnconfigure(0, weight=1)
+        results.grid_rowconfigure(0, weight=1)
+        columns = ("tool", "command", "path")
+        self._cli_scan_tree = ttk.Treeview(results, columns=columns, show="headings", selectmode="browse")
+        self._cli_scan_tree.heading("tool", text="AI CLI")
+        self._cli_scan_tree.heading("command", text="COMMAND")
+        self._cli_scan_tree.heading("path", text="LOCAL PATH")
+        self._cli_scan_tree.column("tool", width=200, minwidth=140, stretch=False)
+        self._cli_scan_tree.column("command", width=160, minwidth=120, stretch=False)
+        self._cli_scan_tree.column("path", width=730, minwidth=360, stretch=True)
+        self._cli_scan_tree.grid(row=0, column=0, sticky="nsew")
+        vertical = ttk.Scrollbar(results, orient=tk.VERTICAL, command=self._cli_scan_tree.yview)
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal = ttk.Scrollbar(results, orient=tk.HORIZONTAL, command=self._cli_scan_tree.xview)
+        horizontal.grid(row=1, column=0, sticky="ew")
+        self._cli_scan_tree.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+
+        self._cli_scan_status = tk.StringVar(value="尚未開始 · 掃描會在背景執行，可隨時取消。")
+        self._cli_scan_summary = tk.StringVar(value="尚無掃描結果")
+        footer = ttk.Frame(dialog, style="TFrame", padding=(22, 0, 22, 16))
+        footer.grid(row=4, column=0, sticky="ew")
+        footer.grid_columnconfigure(0, weight=1)
+        ttk.Label(footer, textvariable=self._cli_scan_status, style="DashboardSub.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(footer, textvariable=self._cli_scan_summary, style="DashboardLive.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        self._cli_scan_progress = ttk.Progressbar(footer, mode="indeterminate", length=190)
+        self._cli_scan_progress.grid(row=0, column=1, rowspan=2, sticky="e", padx=(14, 0))
+
+        if self._cli_scan_running:
+            if self._cli_scan_button:
+                self._cli_scan_button.configure(state=tk.DISABLED)
+            if self._cli_scan_cancel_button:
+                self._cli_scan_cancel_button.configure(state=tk.NORMAL)
+            if self._cli_scan_progress:
+                self._cli_scan_progress.start(12)
+
+    def _start_cli_scan(self) -> None:
+        if self._cli_scan_running or not self._cli_scan_dialog or not self._cli_scan_dialog.winfo_exists():
+            return
+        self._cli_scan_queue = queue.Queue()
+        self._cli_scan_cancel = threading.Event()
+        self._cli_scan_running = True
+        if self._cli_scan_button:
+            self._cli_scan_button.configure(state=tk.DISABLED, text="掃描中…")
+        if self._cli_scan_cancel_button:
+            self._cli_scan_cancel_button.configure(state=tk.NORMAL)
+        if self._cli_scan_progress:
+            self._cli_scan_progress.start(12)
+        if self._cli_scan_status:
+            self._cli_scan_status.set("正在列舉本機磁碟…")
+        if self._cli_scan_summary:
+            self._cli_scan_summary.set("掃描期間不會啟動 CLI 或連線網路")
+        if self._cli_scan_tree:
+            for item in self._cli_scan_tree.get_children():
+                self._cli_scan_tree.delete(item)
+
+        cancel_event = self._cli_scan_cancel
+
+        def scan() -> None:
+            try:
+                snapshot = scan_local_ai_clis(
+                    cancel_event=cancel_event,
+                    progress=lambda update: self._cli_scan_queue.put(("progress", update)),
+                )
+            except Exception as error:
+                self._cli_scan_queue.put(("error", error))
+            else:
+                self._cli_scan_queue.put(("done", snapshot))
+
+        threading.Thread(target=scan, daemon=True, name="ai-hub-cli-discovery").start()
+        self._schedule_cli_scan_poll()
+        self._set_status("CLI SCAN // 本機磁碟只讀掃描已開始")
+
+    def _schedule_cli_scan_poll(self) -> None:
+        if self._cli_scan_poll_after or not self._cli_scan_running or self.closing:
+            return
+        try:
+            self._cli_scan_poll_after = self.root.after(150, self._poll_cli_scan)
+        except tk.TclError:
+            self._cli_scan_poll_after = None
+            if self._cli_scan_cancel:
+                self._cli_scan_cancel.set()
+
+    def _poll_cli_scan(self) -> None:
+        self._cli_scan_poll_after = None
+        while True:
+            try:
+                kind, payload = self._cli_scan_queue.get_nowait()
+            except queue.Empty:
+                break
+            dialog_is_open = bool(self._cli_scan_dialog and self._cli_scan_dialog.winfo_exists())
+            if kind == "progress" and dialog_is_open:
+                elapsed = int(payload.get("elapsed", 0))
+                drive = payload.get("drive") or "本機磁碟"
+                if self._cli_scan_status:
+                    self._cli_scan_status.set(
+                        f"掃描 {drive}  ·  {payload.get('directories', 0):,} 個資料夾  ·  "
+                        f"PATH {payload.get('path_directories', 0)}  ·  {elapsed}s"
+                    )
+                if self._cli_scan_summary:
+                    self._cli_scan_summary.set(
+                        f"已找到 {payload.get('found', 0)} 個啟動檔  ·  無法讀取 {payload.get('inaccessible', 0)} 處"
+                    )
+            elif kind == "done":
+                self._finish_cli_scan(payload, dialog_is_open)
+            elif kind == "error":
+                self._finish_cli_scan_error(payload, dialog_is_open)
+        self._schedule_cli_scan_poll()
+
+    def _finish_cli_scan(self, snapshot: dict[str, Any], dialog_is_open: bool) -> None:
+        self._cli_scan_running = False
+        self._cli_scan_cancel = None
+        if self._cli_scan_progress:
+            self._cli_scan_progress.stop()
+        if self._cli_scan_button:
+            self._cli_scan_button.configure(state=tk.NORMAL, text="重新掃描")
+        if self._cli_scan_cancel_button:
+            self._cli_scan_cancel_button.configure(state=tk.DISABLED)
+
+        results = snapshot.get("results", [])
+        shown = results[:1000]
+        if dialog_is_open and self._cli_scan_tree:
+            for result in shown:
+                self._cli_scan_tree.insert(
+                    "",
+                    tk.END,
+                    values=(result["label"], result["command"], result["path"]),
+                )
+        drive_count = len(snapshot.get("roots", []))
+        elapsed = int(snapshot.get("elapsed", 0))
+        state = "已取消" if snapshot.get("cancelled") else "掃描完成"
+        summary = (
+            f"{state}  ·  {len(results)} 個 CLI 啟動檔  ·  {drive_count} 個磁碟  ·  "
+            f"{snapshot.get('directories', 0):,} 個資料夾  ·  PATH {snapshot.get('path_directories', 0)}  ·  "
+            f"無法讀取 {snapshot.get('inaccessible', 0)} 處  ·  {elapsed}s"
+        )
+        if len(results) > len(shown):
+            summary += f"  ·  清單顯示前 {len(shown)} 筆"
+        if dialog_is_open and self._cli_scan_summary:
+            self._cli_scan_summary.set(summary)
+            if self._cli_scan_status:
+                self._cli_scan_status.set("掃描範圍：本機磁碟與系統 PATH；所有結果皆未執行。")
+        self._set_status(f"CLI SCAN // {len(results)} 個啟動檔 · {drive_count} 個本機磁碟")
+
+    def _finish_cli_scan_error(self, error: Exception, dialog_is_open: bool) -> None:
+        self._cli_scan_running = False
+        self._cli_scan_cancel = None
+        if self._cli_scan_progress:
+            self._cli_scan_progress.stop()
+        if self._cli_scan_button:
+            self._cli_scan_button.configure(state=tk.NORMAL, text="重新掃描")
+        if self._cli_scan_cancel_button:
+            self._cli_scan_cancel_button.configure(state=tk.DISABLED)
+        if dialog_is_open and self._cli_scan_status:
+            self._cli_scan_status.set(f"掃描失敗：{error}")
+        self._set_status(f"CLI SCAN ERROR // {error}")
+
+    def _cancel_cli_scan(self) -> None:
+        if self._cli_scan_cancel:
+            self._cli_scan_cancel.set()
+            if self._cli_scan_cancel_button:
+                self._cli_scan_cancel_button.configure(state=tk.DISABLED)
+            if self._cli_scan_status:
+                self._cli_scan_status.set("正在停止…目前磁碟資料夾處理完後會結束。")
+
+    def _close_cli_scanner(self) -> None:
+        if self._cli_scan_running:
+            self._cancel_cli_scan()
+        dialog, self._cli_scan_dialog = self._cli_scan_dialog, None
+        if dialog and dialog.winfo_exists():
+            dialog.destroy()
+
+    def close(self) -> None:
+        if self._cli_scan_cancel:
+            self._cli_scan_cancel.set()
+        super().close()
+
     def _chart_card(
-        self, parent: ttk.Frame, title: str, meta: str, *, row: int, column: int
+        self, parent: ttk.Frame, title: str, meta: str, *, row: int, column: int, columnspan: int = 1
     ) -> tk.Canvas:
         frame = tk.Frame(parent, bg=EDGE, padx=1, pady=1)
-        frame.grid(row=row, column=column, sticky="nsew", padx=(14 if column == 0 else 5, 5 if column == 0 else 14), pady=(0, 9 if row == 3 else 13))
+        frame.grid(
+            row=row,
+            column=column,
+            columnspan=columnspan,
+            sticky="nsew",
+            padx=(14 if column == 0 else 5, 14 if columnspan > 1 or column == 1 else 5),
+            pady=(0, 8 if row == 3 else 12),
+        )
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
         body = ttk.Frame(frame, style="Panel.TFrame")
         body.grid(row=0, column=0, rowspan=2, sticky="nsew")
         body.grid_columnconfigure(0, weight=1)
         body.grid_rowconfigure(1, weight=1)
-        header = ttk.Frame(body, style="Panel.TFrame", padding=(12, 9, 12, 4))
+        header = ttk.Frame(body, style="Panel.TFrame", padding=(16, 12, 16, 6))
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
         ttk.Label(header, text=title, style="ChartTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(header, text=meta, style="ChartMeta.TLabel").grid(row=0, column=1, sticky="e")
-        canvas = tk.Canvas(body, bg=PANEL, highlightthickness=0, bd=0, height=170)
-        canvas.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 7))
+        canvas = tk.Canvas(body, bg=PANEL, highlightthickness=0, bd=0, height=230 if row == 3 else 190)
+        canvas.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 10))
         canvas.bind("<Configure>", lambda _event, chart=canvas: self._redraw_dashboard_chart(chart))
         return canvas
 
@@ -587,7 +837,6 @@ class GeekDesktop(BaseDesktop):
         if self._dashboard_live_var:
             self._dashboard_live_var.set(f"● LIVE  //  {datetime.now().astimezone().strftime('%H:%M:%S')}")
         self._redraw_dashboard_chart(self._dashboard_canvases.get("trend"))
-        self._redraw_dashboard_chart(self._dashboard_canvases.get("resources"), snapshot)
 
     def _set_dashboard_tasks(self, tasks: list[dict[str, Any]]) -> None:
         self._dashboard_tasks = tasks
@@ -610,16 +859,12 @@ class GeekDesktop(BaseDesktop):
             variables[0].set(value)
             variables[1].set(meta)
 
-    def _redraw_dashboard_chart(
-        self, canvas: tk.Canvas | None, snapshot: dict[str, Any] | None = None
-    ) -> None:
+    def _redraw_dashboard_chart(self, canvas: tk.Canvas | None) -> None:
         if canvas is None or not canvas.winfo_exists():
             return
         chart = next((name for name, item in self._dashboard_canvases.items() if item is canvas), "")
         if chart == "trend":
             self._draw_trend_chart(canvas)
-        elif chart == "resources":
-            self._draw_resource_chart(canvas, snapshot or {})
         elif chart == "tasks":
             self._draw_task_chart(canvas)
         elif chart == "durations":
@@ -628,17 +873,17 @@ class GeekDesktop(BaseDesktop):
     def _draw_trend_chart(self, canvas: tk.Canvas) -> None:
         canvas.delete("all")
         width, height = max(canvas.winfo_width(), 240), max(canvas.winfo_height(), 145)
-        left, right, top, bottom = 39, width - 13, 18, height - 25
+        left, right, top, bottom = 48, width - 18, 24, height - 32
         plot_height = bottom - top
         now = time.monotonic()
         for value in (0, 50, 100):
             y = bottom - plot_height * value / 100
             canvas.create_line(left, y, right, y, fill=EDGE, dash=(2, 4))
-            canvas.create_text(left - 8, y, text=str(value), fill=MUTED, anchor="e", font=("Cascadia Mono", 7))
+            canvas.create_text(left - 10, y, text=str(value), fill=MUTED, anchor="e", font=("Cascadia Mono", 9))
         for age in (120, 60, 0):
             x = left + (right - left) * (120 - age) / 120
             canvas.create_line(x, top, x, bottom, fill="#1B1C1E", dash=(1, 5))
-            canvas.create_text(x, height - 7, text=f"-{age}s" if age else "NOW", fill=MUTED, anchor="s", font=("Cascadia Mono", 7))
+            canvas.create_text(x, height - 8, text=f"-{age}s" if age else "NOW", fill=MUTED, anchor="s", font=("Cascadia Mono", 9))
 
         for history, color in ((self._cpu_history, CYAN), (self._memory_history, GREEN)):
             points: list[float] = []
@@ -650,37 +895,14 @@ class GeekDesktop(BaseDesktop):
                 y = bottom - plot_height * max(0.0, min(100.0, value)) / 100
                 points.extend((x, y))
             if len(points) >= 4:
-                canvas.create_line(*points, fill=color, width=2, smooth=True, splinesteps=12)
+                canvas.create_line(*points, fill=color, width=3, smooth=True, splinesteps=16)
 
-        canvas.create_line(width - 150, 10, width - 137, 10, fill=CYAN, width=2)
-        canvas.create_text(width - 132, 10, text="CPU", fill=TEXT, anchor="w", font=("Cascadia Mono", 7, "bold"))
-        canvas.create_line(width - 90, 10, width - 77, 10, fill=GREEN, width=2)
-        canvas.create_text(width - 72, 10, text="RAM", fill=TEXT, anchor="w", font=("Cascadia Mono", 7, "bold"))
+        canvas.create_line(width - 174, 13, width - 155, 13, fill=CYAN, width=3)
+        canvas.create_text(width - 148, 13, text="CPU", fill=TEXT, anchor="w", font=("Cascadia Mono", 9, "bold"))
+        canvas.create_line(width - 96, 13, width - 77, 13, fill=GREEN, width=3)
+        canvas.create_text(width - 70, 13, text="RAM", fill=TEXT, anchor="w", font=("Cascadia Mono", 9, "bold"))
         if len(self._cpu_history) < 2:
-            canvas.create_text((left + right) / 2, (top + bottom) / 2, text="Collecting live samples…", fill=MUTED, font=("Cascadia Mono", 8))
-
-    def _draw_resource_chart(self, canvas: tk.Canvas, snapshot: dict[str, Any]) -> None:
-        canvas.delete("all")
-        width, height = max(canvas.winfo_width(), 220), max(canvas.winfo_height(), 145)
-        memory = snapshot.get("memory") or {}
-        disk = snapshot.get("disk") or {}
-        rows = (
-            ("CPU", float(snapshot.get("cpu_percent") or 0), CYAN),
-            ("MEMORY", float(memory.get("percent") or 0), GREEN),
-            ("DISK", float(disk.get("percent") or 0), PURPLE),
-        )
-        label_x, bar_left, bar_right = 13, 88, width - 48
-        bar_width = max(20, bar_right - bar_left)
-        row_gap = (height - 34) / len(rows)
-        for index, (label, value, color) in enumerate(rows):
-            y = 18 + index * row_gap
-            clipped = max(0.0, min(100.0, value))
-            canvas.create_text(label_x, y, text=label, fill=MUTED, anchor="w", font=("Cascadia Mono", 7, "bold"))
-            canvas.create_text(width - 12, y, text=f"{clipped:.0f}%", fill=TEXT, anchor="e", font=("Cascadia Mono", 8, "bold"))
-            canvas.create_rectangle(bar_left, y + 11, bar_right, y + 18, fill="#202124", outline="")
-            canvas.create_rectangle(bar_left, y + 11, bar_left + bar_width * clipped / 100, y + 18, fill=color, outline="")
-        if not snapshot:
-            canvas.create_text(width / 2, height - 9, text="Waiting for hardware snapshot", fill=MUTED, anchor="s", font=("Cascadia Mono", 7))
+            canvas.create_text((left + right) / 2, (top + bottom) / 2, text="等待即時取樣…", fill=MUTED, font=("Cascadia Mono", 11))
 
     def _draw_task_chart(self, canvas: tk.Canvas) -> None:
         canvas.delete("all")
@@ -694,27 +916,27 @@ class GeekDesktop(BaseDesktop):
         )
         counts = [(label, sum(task.get("status") in statuses for task in self._dashboard_tasks), color) for label, statuses, color in states]
         total = sum(count for _label, count, _color in counts)
-        diameter = min(height - 20, 112)
-        x0, y0 = 16, max(8, (height - diameter) / 2)
+        diameter = min(height - 24, 148)
+        x0, y0 = 20, max(10, (height - diameter) / 2)
         bbox = (x0, y0, x0 + diameter, y0 + diameter)
-        canvas.create_oval(*bbox, outline="#202124", width=13)
+        canvas.create_oval(*bbox, outline="#202124", width=16)
         if total:
             angle = 90
             for _label, count, color in counts:
                 if not count:
                     continue
                 extent = 360 * count / total
-                canvas.create_arc(*bbox, start=angle, extent=-extent, style=tk.ARC, outline=color, width=13)
+                canvas.create_arc(*bbox, start=angle, extent=-extent, style=tk.ARC, outline=color, width=16)
                 angle -= extent
-        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 - 3, text=str(total), fill=TEXT, font=("Cascadia Mono", 18, "bold"))
-        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 + 17, text="TASKS", fill=MUTED, font=("Cascadia Mono", 7, "bold"))
-        legend_x = x0 + diameter + 25
-        legend_y = max(12, (height - len(counts) * 19) / 2)
+        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 - 5, text=str(total), fill=TEXT, font=("Cascadia Mono", 22, "bold"))
+        canvas.create_text(x0 + diameter / 2, y0 + diameter / 2 + 19, text="TASKS", fill=MUTED, font=("Cascadia Mono", 9, "bold"))
+        legend_x = x0 + diameter + 28
+        legend_y = max(12, (height - len(counts) * 24) / 2)
         for index, (label, count, color) in enumerate(counts):
-            y = legend_y + index * 19
-            canvas.create_oval(legend_x, y - 4, legend_x + 7, y + 3, fill=color, outline="")
-            canvas.create_text(legend_x + 14, y, text=label, fill=MUTED, anchor="w", font=("Cascadia Mono", 7, "bold"))
-            canvas.create_text(width - 13, y, text=str(count), fill=TEXT, anchor="e", font=("Cascadia Mono", 8, "bold"))
+            y = legend_y + index * 24
+            canvas.create_oval(legend_x, y - 5, legend_x + 9, y + 4, fill=color, outline="")
+            canvas.create_text(legend_x + 17, y, text=label, fill=MUTED, anchor="w", font=("Cascadia Mono", 9, "bold"))
+            canvas.create_text(width - 16, y, text=str(count), fill=TEXT, anchor="e", font=("Cascadia Mono", 10, "bold"))
 
     @staticmethod
     def _task_duration(task: dict[str, Any]) -> float | None:
@@ -739,19 +961,19 @@ class GeekDesktop(BaseDesktop):
             reverse=True,
         )[:6]
         if not rows:
-            canvas.create_text(width / 2, height / 2, text="No completed task timings yet", fill=MUTED, font=("Cascadia Mono", 8))
+            canvas.create_text(width / 2, height / 2, text="尚無已完成任務", fill=MUTED, font=("Cascadia Mono", 11))
             return
         left, right = 116, width - 55
         top = 14
-        row_height = min(25, max(16, (height - 22) / len(rows)))
+        row_height = min(31, max(20, (height - 24) / len(rows)))
         max_duration = max(duration for _task, duration in rows) or 1.0
         for index, (task, duration) in enumerate(rows):
             y = top + index * row_height
             title = str(task.get("provider_id") or task.get("title") or "TASK")[:15]
-            canvas.create_text(left - 8, y + 5, text=title, fill=MUTED, anchor="e", font=("Cascadia Mono", 7))
-            canvas.create_rectangle(left, y, right, y + 9, fill="#202124", outline="")
-            canvas.create_rectangle(left, y, left + max(2, (right - left) * duration / max_duration), y + 9, fill=GREEN, outline="")
-            canvas.create_text(width - 7, y + 5, text=native.compact_seconds(duration), fill=TEXT, anchor="e", font=("Cascadia Mono", 7))
+            canvas.create_text(left - 10, y + 7, text=title, fill=MUTED, anchor="e", font=("Cascadia Mono", 9))
+            canvas.create_rectangle(left, y, right, y + 13, fill="#202124", outline="")
+            canvas.create_rectangle(left, y, left + max(3, (right - left) * duration / max_duration), y + 13, fill=GREEN, outline="")
+            canvas.create_text(width - 8, y + 7, text=native.compact_seconds(duration), fill=TEXT, anchor="e", font=("Cascadia Mono", 9))
         canvas.create_text(left, height - 4, text="FAST", fill=MUTED, anchor="sw", font=("Cascadia Mono", 7))
         canvas.create_text(right, height - 4, text="SLOW", fill=MUTED, anchor="se", font=("Cascadia Mono", 7))
 

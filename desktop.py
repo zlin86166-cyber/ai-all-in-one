@@ -152,8 +152,14 @@ class AIHubDesktop:
 
         self.root = tk.Tk()
         self.root.title("AI Hub · 本機多模型工作台")
-        self.root.geometry("1540x930")
-        self.root.minsize(1180, 720)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        window_width = min(1540, max(600, screen_width - 24))
+        window_height = min(930, max(600, screen_height - 40))
+        window_x = max(0, (screen_width - window_width) // 2)
+        window_y = max(0, (screen_height - window_height) // 2)
+        self.root.geometry(f"{window_width}x{window_height}+{window_x}+{window_y}")
+        self.root.minsize(min(600, screen_width), min(600, screen_height))
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._configure_styles()
@@ -2416,10 +2422,21 @@ def main() -> int:
     args = parse_args()
     max_control = _max_control_requested(args)
     if os.name == "nt":
+        dpi_context_set = False
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except (AttributeError, OSError):
+            set_dpi_context = ctypes.windll.user32.SetProcessDpiAwarenessContext
+            set_dpi_context.argtypes = [ctypes.c_void_p]
+            set_dpi_context.restype = ctypes.c_bool
+            dpi_context_set = bool(
+                set_dpi_context(ctypes.c_void_p(-4))
+            )
+        except (AttributeError, OSError, TypeError):
             pass
+        if not dpi_context_set:
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except (AttributeError, OSError):
+                pass
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AIHub.Local.ControlDeck")
         except (AttributeError, OSError):

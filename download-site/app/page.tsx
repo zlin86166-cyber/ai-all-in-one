@@ -1,14 +1,14 @@
 const DOWNLOAD_URL =
-  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.4/AIHub-Windows.zip';
-const RELEASE_VERSION = 'v0.2.4';
+  'https://github.com/zlin86166-cyber/ai-all-in-one/releases/download/v0.2.5/AIHub-Windows.zip';
+const RELEASE_VERSION = 'v0.2.5';
 const REPOSITORY_URL = 'https://github.com/zlin86166-cyber/ai-all-in-one';
 
 const features = [
-  ['CLI 原生接入', 'Codex 與 Gemini 都從本機官方 CLI 啟動。'],
+  ['CLI 掃描與原生接入', '唯讀盤點本機磁碟和 PATH 中的 AI CLI，Codex 與 Gemini 由官方 CLI 啟動。'],
   ['多 AI 協作', '規劃、分工、並行、Peer Review 與成果彙整都在同一條任務時間線。'],
   ['專案與檔案', '切換不同專案，選取檔案範圍，預覽、修改、下載與匯入匯出。'],
   ['本機模型', '發現 Ollama 模型，並同步 Kimi／DeepSeek 官方 ≤50B 模型目錄。'],
-  ['進度可追蹤', '即時顯示階段、進度、預估剩餘時間、預計與實際結束時間。'],
+  ['進度與圖表', '追蹤階段、進度、ETA 與結束時間，並以 CPU／記憶體趨勢、任務狀態環圖和耗時圖呈現。'],
   ['CLI 用量', 'Codex 顯示 5 小時／週剩餘率；Gemini 可直接開啟 CLI 查詢模型額度。'],
   ['權限透明', 'Workspace、Full 與 MAX-CLI 分級；帳號發布和高風險操作保留逐次確認。'],
 ];
